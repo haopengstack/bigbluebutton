@@ -32,6 +32,7 @@ package org.bigbluebutton.modules.present.business
 	
 	import org.as3commons.logging.api.ILogger;
 	import org.as3commons.logging.api.getClassLogger;
+	import org.bigbluebutton.core.UsersUtil;
 	import org.bigbluebutton.modules.present.events.UploadCompletedEvent;
 	import org.bigbluebutton.modules.present.events.UploadIoErrorEvent;
 	import org.bigbluebutton.modules.present.events.UploadProgressEvent;
@@ -70,8 +71,10 @@ package org.bigbluebutton.modules.present.business
 		 * @param file - The FileReference class of the file we wish to send
 		 * 
 		 */		
-		public function upload(presentationName:String, file:FileReference):void {
+		public function upload(podId: String, presentationName:String, file:FileReference, downloadable:Boolean):void {
 			sendVars.presentation_name = presentationName;
+			sendVars.is_downloadable = downloadable;
+			sendVars.pod_id = podId;
 			var fileToUpload : FileReference = new FileReference();
 			fileToUpload = file;
 			
@@ -125,8 +128,12 @@ package org.bigbluebutton.modules.present.business
 		 * 
 		 */
 		private function onUploadIoError(event:IOErrorEvent):void {
-			if(event.errorID != 2038){ //upload works despite of this error.
-				LOGGER.error("onUploadIoError text: {0}, errorID: {1}", [event.text, event.errorID]);
+			if (event.errorID != 2038){ //upload works despite of this error.
+                var logData:Object = UsersUtil.initLogData();
+                logData.tags = ["presentation"];
+                logData.logCode = "io_error_on_presentation_upload"; 
+                LOGGER.error(JSON.stringify(logData));
+            
 				dispatcher.dispatchEvent(new UploadIoErrorEvent());
 			}
 			
@@ -138,8 +145,11 @@ package org.bigbluebutton.modules.present.business
 		 * 
 		 */		
 		private function onUploadSecurityError(event:SecurityErrorEvent) : void {
-			dispatcher.dispatchEvent(new UploadSecurityErrorEvent());
-			LOGGER.error("A security error occured while trying to upload the presentation. {0}", [event.toString()]);
+            var logData:Object = UsersUtil.initLogData();
+            logData.tags = ["presentation"];
+						logData.logCode = "security_error_on_presentation_upload"; 
+            LOGGER.error(JSON.stringify(logData));
+            dispatcher.dispatchEvent(new UploadSecurityErrorEvent());
 		}		
 	}
 }

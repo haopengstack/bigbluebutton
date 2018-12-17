@@ -1,61 +1,61 @@
 package org.bigbluebutton.air.presentation.views {
-	
-	import flash.display.StageOrientation;
-	import flash.events.Event;
-	import flash.events.MouseEvent;
+	import flash.system.ApplicationDomain;
 	import flash.system.LoaderContext;
 	
-	import mx.core.FlexGlobals;
+	import mx.controls.SWFLoader;
 	
-	import org.bigbluebutton.lib.presentation.models.Slide;
+	import org.bigbluebutton.air.presentation.models.Slide;
+	import org.bigbluebutton.air.whiteboard.views.WhiteboardCanvas;
 	
-	public class PresentationView extends PresentationViewBase implements IPresentationView {
-		override protected function childrenCreated():void {
-			super.childrenCreated();
+	import spark.components.Group;
+	
+	public class PresentationView extends Group {
+		private var _viewport:Group;
+		
+		public function get viewport():Group {
+			return _viewport;
 		}
 		
-		public function onClick(e:MouseEvent):void {
-			//buttonTestSignal.dispatch();
+		private var _swfLoader:SWFLoader;
+		
+		public function get swfLoader():SWFLoader {
+			return _swfLoader;
 		}
 		
-		public function setPresentationName(name:String):void {
-			FlexGlobals.topLevelApplication.pageName.text = name;
+		private var _wbCanvas:WhiteboardCanvas;
+		
+		public function get wbCanvas():WhiteboardCanvas {
+			return _wbCanvas;
+		}
+		
+		public function PresentationView() {
+			super();
+			
+			_viewport = new Group();
+			_viewport.percentWidth = 100;
+			_viewport.percentHeight = 100;
+			_viewport.clipAndEnableScrolling = true;
+			addElement(_viewport);
+			
+			_swfLoader = new SWFLoader();
+			_swfLoader.percentWidth = 100;
+			_swfLoader.percentHeight = 100;
+			_swfLoader.scaleContent = true;
+			_viewport.addElement(_swfLoader);
+			
+			_wbCanvas = new WhiteboardCanvas();
+			_viewport.addElement(_wbCanvas);
 		}
 		
 		public function setSlide(s:Slide):void {
 			if (s != null) {
-				var context:LoaderContext = new LoaderContext();
+				var context:LoaderContext = new LoaderContext(false, ApplicationDomain.currentDomain, null);
 				context.allowCodeImport = true;
-				slide.loaderContext = context;
-				slide.source = s.SWFFile.source;
+				_swfLoader.loaderContext = context;
+				_swfLoader.source = s.SWFFile.source;
 			} else {
-				slide.source = null;
+				_swfLoader.source = null;
 			}
-		}
-		
-		public function securityError(e:Event):void {
-			trace("PresentationView.as Security error : " + e.toString());
-		}
-		
-		override public function rotationHandler(rotation:String):void {
-			switch (rotation) {
-				case StageOrientation.ROTATED_LEFT:
-					slide.rotation = -90;
-					break;
-				case StageOrientation.ROTATED_RIGHT:
-					slide.rotation = 90;
-					break;
-				case StageOrientation.UPSIDE_DOWN:
-					slide.rotation = 180;
-					break;
-				case StageOrientation.DEFAULT:
-				case StageOrientation.UNKNOWN:
-				default:
-					slide.rotation = 0;
-			}
-		}
-		
-		public function dispose():void {
 		}
 	}
 }

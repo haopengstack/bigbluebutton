@@ -2,56 +2,64 @@
 <s:ItemRenderer xmlns:fx="http://ns.adobe.com/mxml/2009"
 				xmlns:s="library://ns.adobe.com/flex/spark"
 				xmlns:mx="library://ns.adobe.com/flex/mx"
-				styleName="chatRoomItemStyle">
+				xmlns:common="org.bigbluebutton.air.common.views.*"
+				xmlns:views="org.bigbluebutton.air.chat.views.*"
+				width="100%"
+				styleName="chatRoomItem">
+	
+	<s:states>
+		<s:State name="normal" />
+		<s:State name="hovered" />
+		<s:State name="selected" />
+	</s:states>
 
 	<fx:Script>
 		<![CDATA[
-			import org.bigbluebutton.lib.chat.models.ChatMessage;
-			import org.bigbluebutton.lib.chat.models.ChatMessages;
+			import org.bigbluebutton.air.chat.models.GroupChat;
+			import org.bigbluebutton.air.user.utils.UserUtils;
+			
+			override protected function updateDisplayList(unscaledWidth:Number, unscaledHeight:Number):void {
+				publicChatIcon.text = publicChatIcon.getStyle("icon");
+				
+				containerGroup.padding = getStyle("padding");
+				title.setStyle("paddingLeft", getStyle("padding"));
+				title.setStyle("paddingRight", getStyle("padding"));
+				
+				super.updateDisplayList(unscaledWidth, unscaledHeight);
+			}
 			
 			override public function set data(obj:Object):void {
 				super.data = obj;
 				if (obj) {
-					if (!obj.hasOwnProperty("button")) {
-						title.text = obj.name;
-						if (obj.online == false) {
-							title.text += resourceManager.getString('resources', 'userDetail.userOffline');
-						}
-						var chatMessages:ChatMessages = obj.chatMessages as ChatMessages;
-						newMessages.label = String(chatMessages.newMessages);
-						if (chatMessages.newMessages > 0) {
-							newMessages.visible = true;
-						} else {
-							newMessages.visible = false;
-						}
+					title.text = obj.name;
+					if (obj.isPublic == true) {
+						publicChatIcon.visible = publicChatIcon.includeInLayout = true;
+						participantIcon.visible = participantIcon.includeInLayout = false;
 					} else {
-						newMessages.visible = false;
-						title.text = "+" + resourceManager.getString('resources', 'chat.item.privateChat');
+						participantIcon.setInitials(UserUtils.getInitials(obj.name));
+						participantIcon.visible = participantIcon.includeInLayout = true;
+						participantIcon.setRole(obj.partnerRole);
+						publicChatIcon.visible = publicChatIcon.includeInLayout = false;
 					}
+					newMessages.label = String(obj.newMessages);
+					newMessages.visible = obj.newMessages > 0;
 				}
 			}
 		]]>
 	</fx:Script>
-	<s:Group width="100%">
-		<s:layout>
-			<s:HorizontalLayout verticalAlign="middle" />
-		</s:layout>
+	<s:HGroup id="containerGroup"
+			  width="100%"
+			  verticalAlign="middle"
+			  horizontalAlign="center">
+		<s:Label id="publicChatIcon"
+				 visible="false"
+				 includeInLayout="false"
+				 styleName="icon-group-chat chatIcon" />
+		<common:ParticipantIcon id="participantIcon" />
 		<s:Label id="title"
 				 width="100%"
-				 styleName="contentFontSize chatRoomLabelStyle"
-				 verticalCenter="0"
-				 horizontalCenter="0" />
-		<s:Button id="newMessages"
-				  buttonMode="false"
-				  styleName="newMessagesButtonStyle" />
-		<s:Image styleName="iconStyle arrowRightStyle"
-				 horizontalCenter="0"
-				 verticalCenter="0" />
-	</s:Group>
-	<s:Line width="100%">
-		<s:stroke>
-			<s:SolidColorStroke color="{getStyle('lineColor')}"
-								weight="{getStyle('lineWeight')}" />
-		</s:stroke>
-	</s:Line>
+				 styleName="contentFontSize" />
+		<views:NewMessagesIndicator id="newMessages"
+									styleName="newMessagesIndicator" />
+	</s:HGroup>
 </s:ItemRenderer>

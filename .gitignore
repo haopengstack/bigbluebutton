@@ -6,6 +6,8 @@ record-and-playback/playback-web/playback-web-0.1.war
 record-and-playback/.project
 push_to_git.py
 **/target/*
+**/.cache-main
+**/.cache-tests
 .vagrant/*
 **/.settings/*
 */.gradle
@@ -24,5 +26,11 @@ bigbluebutton-web/.classpath
 bigbluebutton-web/.project
 akka-bbb-apps/akka-bbb-apps*.log
 bigbluebutton-html5/log/development.log
+bigbluebutton-client/.actionScriptProperties
 bigbluebutton-web/target-eclipse*
 record-and-playback/.loadpath
+clients/flash/**/build
+clients/flash/**/.gradle
+**/.idea/*
+*.iml
+*~

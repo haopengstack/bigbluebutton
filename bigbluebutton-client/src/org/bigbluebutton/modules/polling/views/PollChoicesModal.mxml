@@ -19,22 +19,23 @@ with BigBlueButton; if not, see <http://www.gnu.org/licenses/>.
 
 -->
 <mx:TitleWindow xmlns:fx="http://ns.adobe.com/mxml/2009" 
-				xmlns:s="library://ns.adobe.com/flex/spark" 
 				xmlns:mx="library://ns.adobe.com/flex/mx"
+				xmlns:common="org.bigbluebutton.common.*"
 				width="350" layout="vertical"
-				show="{focusManager.setFocus(choiceFirst)}">
+				implements="org.bigbluebutton.common.IKeyboardClose"
+				show="focusManager.setFocus(choiceFirst)">
 	<fx:Script>
 		<![CDATA[
 			import com.asfusion.mate.events.Dispatcher;
 			
-			import mx.managers.PopUpManager;
-			
 			import org.as3commons.lang.ArrayUtils;
 			import org.as3commons.lang.StringUtils;
+			import org.bigbluebutton.common.IKeyboardClose;
+			import org.bigbluebutton.core.PopUpUtil;
 			import org.bigbluebutton.modules.polling.events.StartCustomPollEvent;
 			import org.bigbluebutton.modules.present.ui.views.PresentationWindow;
 			import org.bigbluebutton.util.i18n.ResourceUtil;
-			
+
 			private var _presentationWindow : PresentationWindow;
 			
 			public function setPresentationWindow(window:PresentationWindow):void {
@@ -47,7 +48,7 @@ with BigBlueButton; if not, see <http://www.gnu.org/licenses/>.
 					_presentationWindow.slideView.onZoomSlide(100);
 					var dispatcher:Dispatcher = new Dispatcher();
 					dispatchEvent(new StartCustomPollEvent("Custom", answers));
-					PopUpManager.removePopUp(this);
+					PopUpUtil.removePopUp(this);
 				}
 			}
 			
@@ -61,11 +62,23 @@ with BigBlueButton; if not, see <http://www.gnu.org/licenses/>.
 				return result;
 			}
 			
+			private function onCloseClicked():void {
+				PopUpUtil.removePopUp(this);
+			}
 		]]>
 	</fx:Script>
 	
-	<mx:Label id="modalTitle" styleName="micSettingsWindowTitleStyle"
-			  text="{ResourceUtil.getInstance().getString('bbb.polling.customChoices.title')}" width="100%"/>
+	<mx:Canvas id="cnvTitle" width="100%">
+		<common:AdvancedLabel id="modalTitle"
+							  maxWidth="300"
+							  horizontalCenter="0"
+							  text="{ResourceUtil.getInstance().getString('bbb.polling.customChoices.title')}"
+							  styleName="titleWindowStyle" />
+	</mx:Canvas>
+	
+	<mx:Canvas width="100%" styleName="pollingTipBox" verticalScrollPolicy="off" horizontalScrollPolicy="off">
+		<mx:Text horizontalCenter="0" text="{ResourceUtil.getInstance().getString('bbb.polling.customChoices.hint')}"/>
+	</mx:Canvas>
 	
 	<mx:HRule width="100%"/>
 	
@@ -82,8 +95,9 @@ with BigBlueButton; if not, see <http://www.gnu.org/licenses/>.
 	
 	<mx:HBox width="100%" horizontalGap="10" horizontalAlign="right">
 		<mx:Button id="publishButton" click="publishButton_clickHandler(event)"
+				   styleName="mainActionButton"
 				   label="{ResourceUtil.getInstance().getString('bbb.polling.startButton.label')}"/>
-		<mx:Button id="closeButton" click="PopUpManager.removePopUp(this)"
+		<mx:Button id="closeButton" click="onCloseClicked()"
 				   label="{ResourceUtil.getInstance().getString('bbb.polling.closeButton.label')}"/>
 	</mx:HBox>
 	

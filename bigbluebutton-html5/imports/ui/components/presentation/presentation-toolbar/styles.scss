@@ -1,0 +1,113 @@
+@import "/imports/ui/stylesheets/variables/_all";
+
+.presentationToolbarWrapper,
+.presentationControls,
+.zoomWrapper {
+  order: 2;
+  display: flex;
+  flex-direction: row;
+  align-items: center;
+  margin-left: .5rem;
+  margin-right: .5rem;
+  border-radius: var(--toolbar-button-border-radius);
+}
+
+.presentationControls,
+.zoomWrapper {
+  box-shadow: 0 0 10px -2px rgba(0, 0, 0, .25);
+}
+
+.presentationToolbarWrapper {
+  position: absolute;
+  bottom: .8rem;
+  align-self: center;
+  justify-content: center;
+  z-index: 1;
+
+  @include mq("#{$landscape} and (max-height:#{upper-bound($small-range)}), #{$small-only}") {
+    transform: scale(.75);
+    transform-origin: bottom;
+  }
+
+
+  button,
+  select,
+  > div {
+    color: var(--toolbar-button-color);
+    background-color: var(--toolbar-button-bg);
+    border-top: 0;
+    border-bottom: 0;
+    border-left: 0;
+    border-radius: 0;
+    height: 2.25rem;
+    box-shadow: none !important;
+    border: 0;    
+  }
+
+  i {
+    color: var(--toolbar-button-color);
+  }
+
+
+
+  button:first-of-type {
+    border-top-left-radius: 5px;
+    border-bottom-left-radius: 5px;
+  }
+
+  button:last-of-type {
+    border-top-right-radius: 5px;
+    border-bottom-right-radius: 5px;
+  }
+}
+
+.zoomWrapper {
+  // border-radius: 0 5px 5px 0;
+  justify-content: space-between;
+  // flex-direction: column;
+  width: 11.5%;
+  min-width: 175px;
+  background-color: var(--toolbar-button-bg);
+}
+
+.zoomWrapperNoBorder {
+  border-right: 0 !important;
+}
+
+.skipSlide,
+.prevSlide {
+  border: none !important;
+
+  &[aria-disabled="true"] {
+    opacity: 1;
+    background-color: var(--toolbar-list-bg);
+  }
+}
+
+.skipSlideSelect {
+  padding: 0 var(--sm-padding-y);
+}
+
+.skipSlideSelect,
+.zoomPercentageDisplay {
+  border-left: var(--toolbar-button-border) solid var(--toolbar-button-border-color) !important;
+  border-right: var(--toolbar-button-border) solid var(--toolbar-button-border-color) !important;
+}
+
+.zoomSlider {
+  width: 50%;
+}
+
+.zoomMinMax {
+  font-weight: normal;
+}
+
+.zoomPercentageDisplay {
+  width: 100%;
+  height: 2.25rem;
+  text-align: center;
+  color: black;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}

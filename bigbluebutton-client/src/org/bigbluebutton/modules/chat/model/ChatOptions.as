@@ -1,7 +1,7 @@
 /**
  * BigBlueButton open source conferencing system - http://www.bigbluebutton.org/
  *
- * Copyright (c) 2012 BigBlueButton Inc. and by respective authors (see below).
+ * Copyright (c) 2017 BigBlueButton Inc. and by respective authors (see below).
  *
  * This program is free software; you can redistribute it and/or modify it under the
  * terms of the GNU Lesser General Public License as published by the Free Software
@@ -17,57 +17,37 @@
  *
  */
 package org.bigbluebutton.modules.chat.model {
-	
-	import org.bigbluebutton.core.BBB;
-	
-	public class ChatOptions {
-		
+
+	import org.bigbluebutton.core.Options;
+
+	public class ChatOptions extends Options {
+
 		[Bindable]
 		public var privateEnabled:Boolean = true;
-		
+
 		[Bindable]
-		public var fontSize:String = "12";
-		
+		public var groupEnabled:Boolean = false;
+
 		[Bindable]
-		public var position:String = "top-right";
-		
+		public var fontSize:String = "14";
+
 		[Bindable]
-		public var baseTabIndex:int;
-		
+		public var baseTabIndex:int = 801;
+
 		[Bindable]
 		public var colorPickerIsVisible:Boolean = false;
-		
+
 		[Bindable]
 		public var maxMessageLength:uint = 1024;
-		
+
+		[Bindable]
+		public var maxNumWindows:uint = 9;
+
+		[Bindable]
+		public var maxNumChatPerWindow:uint = 10;
+
 		public function ChatOptions() {
-			var cxml:XML = BBB.getConfigForModule("ChatModule");
-			if (cxml != null) {
-				if (cxml.@privateEnabled != undefined) {
-					privateEnabled = (cxml.@privateEnabled.toString().toUpperCase() == "TRUE") ? true : false;
-				}
-				if (cxml.@fontSize != undefined) {
-					fontSize = cxml.@fontSize.toString();
-				}
-				if (cxml.@position != undefined) {
-					position = cxml.@position.toString();
-				}
-				if (cxml.@baseTabIndex != undefined) {
-					baseTabIndex = cxml.@baseTabIndex;
-				} else {
-					baseTabIndex = 701;
-				}
-				if (cxml.@colorPickerIsVisible != undefined) {
-					colorPickerIsVisible = (cxml.@colorPickerIsVisible.toString().toUpperCase() == "TRUE") ? true : false;
-				}
-				if (cxml.@maxMessageLength != undefined) {
-					maxMessageLength = parseInt(cxml.@maxMessageLength.toString());
-				}
-			}
-		}
-		
-		public function getBaseIndex():int {
-			return baseTabIndex;
+			name = "ChatModule";
 		}
 	}
 }

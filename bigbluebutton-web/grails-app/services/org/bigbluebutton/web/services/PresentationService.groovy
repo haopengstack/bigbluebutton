@@ -80,7 +80,7 @@ class PresentationService {
         // Run conversion on another thread.
         Timer t = new Timer(uploadedPres.getName(), false)
 
-        t.runAfter(1000) {
+        t.runAfter(5000) {
             try {
                 documentConversionService.processDocument(uploadedPres)
             } finally {
@@ -107,6 +107,14 @@ class PresentationService {
 		log.debug "showing $thumbFile"
 
 		new File(thumbFile)
+	}
+
+	def showPng = {conf, room, presentationName, page ->
+		def pngFile = roomDirectory(conf, room).absolutePath + File.separatorChar + presentationName + File.separatorChar +
+				"pngs" + File.separatorChar + "slide-${page}.png"
+		log.debug "showing $pngFile"
+
+		new File(pngFile)
 	}
 
 	def showTextfile = {conf, room, presentationName, textfile ->
@@ -143,7 +151,8 @@ class PresentationService {
 		if (presDir.exists()) {
 			File pres = new File(presDir.getAbsolutePath() + File.separatorChar + testUploadedPresentation)
 			if (pres.exists()) {
-				UploadedPresentation uploadedPres = new UploadedPresentation(testConferenceMock, testRoomMock, testPresentationName);
+				// TODO add podId
+				UploadedPresentation uploadedPres = new UploadedPresentation("B", testConferenceMock, testRoomMock, testPresentationName);
 				uploadedPres.setUploadedFile(pres);
 				// Run conversion on another thread.
 				new Timer().runAfter(1000) 
@@ -158,6 +167,7 @@ class PresentationService {
 		}
 		
 	}
+
 }
 
 /*** Helper classes **/

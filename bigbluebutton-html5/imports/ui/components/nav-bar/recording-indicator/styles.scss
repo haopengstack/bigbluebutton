@@ -1,0 +1,40 @@
+@import "../../../stylesheets/variables/_all";
+
+%baseIndicator {
+  position: relative;
+  display: inline-block;
+  width: var(--font-size-base);
+  height: var(--font-size-base);
+  border-radius: 50%;
+  border: 1px solid var(--color-white);
+
+  &:after {
+    content: '';
+    width: calc(var(--font-size-base) / 2);
+    height: calc(var(--font-size-base) / 2);
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    margin-top: calc((var(--font-size-base) / -4));
+    margin-left: calc((var(--font-size-base) / -4));
+    border-radius: 50%;
+    background-color: var(--color-danger);
+  }
+}
+
+.recordIndicator {
+  @extend %baseIndicator;
+}
+
+.notRecording {
+  @extend %baseIndicator;
+  border: 1px solid var(--color-gray);
+
+  &:after {
+    background-color: var(--color-gray);
+  }
+}
+
+.recordState {
+  display: flex;
+}

@@ -22,9 +22,9 @@ module BigBlueButton
     module Audio
       FFMPEG_AEVALSRC = "aevalsrc=s=48000:c=stereo:exprs=0|0"
       FFMPEG_AFORMAT = "aformat=sample_fmts=s16:sample_rates=48000:channel_layouts=stereo"
-      FFMPEG_WF_CODEC = 'pcm_s16le'
-      FFMPEG_WF_ARGS = ['-c:a', FFMPEG_WF_CODEC, '-f', 'wav']
-      WF_EXT = 'wav'
+      FFMPEG_WF_CODEC = 'flac'
+      FFMPEG_WF_ARGS = ['-c:a', FFMPEG_WF_CODEC, '-f', 'flac']
+      WF_EXT = 'flac'
 
       def self.dump(edl)
         BigBlueButton.logger.debug "EDL Dump:"
@@ -92,37 +92,53 @@ module BigBlueButton
           audio = entry[:audio]
           duration = entry[:next_timestamp] - entry[:timestamp]
 
-          if audio
+          # Check for and handle audio files with mismatched lengths (generated
+          # by buggy versions of freeswitch in old BigBlueButton
+          if audio and entry[:original_duration] and
+               (audioinfo[audio[:filename]][:duration].to_f / entry[:original_duration]) < 0.997 and
+               ((entry[:original_duration] - audioinfo[audio[:filename]][:duration]).to_f /
+                      entry[:original_duration]).abs < 0.05
+            speed = audioinfo[audio[:filename]][:duration].to_f / entry[:original_duration]
             BigBlueButton.logger.info "  Using input #{audio[:filename]}"
 
+            BigBlueButton.logger.warn "  Audio file length mismatch, adjusting speed to #{speed}"
+
+            # Have to calculate the start point after the atempo filter in this case,
+            # since it can affect the audio start time.
+            # Also reset the pts to start at 0, so the duration trim works correctly.
             filter = "[#{input_index}] "
-
-            if entry[:original_duration] and ((entry[:original_duration] - audioinfo[audio[:filename]][:duration]).to_f / entry[:original_duration]).abs < 0.05
-              speed = audioinfo[audio[:filename]][:duration].to_f / entry[:original_duration]
-              BigBlueButton.logger.warn "  Audio file length mismatch, adjusting speed to #{speed}"
-
-              # Have to calculate the start point after the atempo filter in this case,
-              # since it can affect the audio start time.
-              # Also reset the pts to start at 0, so the duration trim works correctly.
-              filter << "atempo=#{speed},atrim=start=#{ms_to_s(audio[:timestamp])},"
-              filter << "asetpts=PTS-STARTPTS,"
-
-              ffmpeg_inputs << {
-                :filename => audio[:filename],
-                :seek => 0
-              }
-            else
-              ffmpeg_inputs << {
-                :filename => audio[:filename],
-                :seek => audio[:timestamp]
-              }
-            end
-
+            filter << "atempo=#{speed},atrim=start=#{ms_to_s(audio[:timestamp])},"
+            filter << "asetpts=PTS-STARTPTS,"
             filter << "#{FFMPEG_AFORMAT},apad,atrim=end=#{ms_to_s(duration)} [out#{output_index}]"
             ffmpeg_filters << filter
 
+            ffmpeg_inputs << {
+              :filename => audio[:filename],
+              :seek => 0
+            }
+
             input_index += 1
             output_index += 1
+
+            # Normal audio input handling. Skip this input and generate silence
+            # if the seekpoint is past the end of the audio, which can happen
+            # if events are slightly misaligned and you get unlucky with a
+            # start/stop or chapter break.
+          elsif audio and audio[:timestamp] < audioinfo[audio[:filename]][:duration]
+            BigBlueButton.logger.info "  Using input #{audio[:filename]}"
+
+            filter = "[#{input_index}] "
+            filter << "#{FFMPEG_AFORMAT},apad,atrim=end=#{ms_to_s(duration)} [out#{output_index}]"
+            ffmpeg_filters << filter
+
+            ffmpeg_inputs << {
+              :filename => audio[:filename],
+              :seek => audio[:timestamp]
+            }
+
+            input_index += 1
+            output_index += 1
+
           else
             BigBlueButton.logger.info "  Generating silence"
 
@@ -169,20 +185,29 @@ module BigBlueButton
 
       def self.audio_info(filename)
         IO.popen([*FFPROBE, filename]) do |probe|
-          info = JSON.parse(probe.read, :symbolize_names => true)
-          if !info[:streams]
-            return {}
+          info = nil
+          begin
+            info = JSON.parse(probe.read, :symbolize_names => true)
+          rescue StandardError => e
+            BigBlueButton.logger.warn("Couldn't parse audio info: #{e}")
           end
-          info[:audio] = info[:streams].find { |stream| stream[:codec_type] == 'audio' }
+          return {} if !info
+          return {} if !info[:streams]
+          return {} if !info[:format]
 
-          if info[:audio]
-            info[:sample_rate] = info[:audio][:sample_rate].to_i
+          info[:audio] = info[:streams].find do |stream|
+            stream[:codec_type] == 'audio'
           end
+          return {} if !info[:audio]
+
+          info[:sample_rate] = info[:audio][:sample_rate].to_i
 
           if info[:format][:format_name] == 'wav'
             # wav files generated by freeswitch can have incorrect length
             # field if longer than 4GB, so recalculate based on filesize (ouch!)
-            audio_size = info[:format][:size].to_r - 44 # wav header is 44 bytes
+            BigBlueButton.logger.debug("Recalculated duration from wav file length")
+            audio_offset = self.get_wave_data_offset(filename)
+            audio_size = info[:format][:size].to_r - audio_offset
             info[:duration] = (audio_size * 8 / info[:audio][:bit_rate].to_i * 1000).to_i
           else
             info[:duration] = (info[:format][:duration].to_r * 1000).to_i
@@ -197,6 +222,32 @@ module BigBlueButton
         s = timestamp / 1000
         ms = timestamp % 1000
         "%d.%03d" % [s, ms]
+      end
+
+      # Helper function for determining correct length of freeswitch's long wave files
+      def self.get_wave_data_offset(filename)
+        File.open(filename, 'rb') do |file|
+          riff = file.read(4)
+          wavesize = file.read(4).unpack('V')[0].to_i
+          wave = file.read(4)
+          if riff != 'RIFF' or wavesize.nil? or wave != 'WAVE'
+            return 0
+          end
+          while true
+            # Read chunks until we find one named 'data'
+            chunkname = file.read(4)
+            chunksize = file.read(4).unpack('V')[0].to_i
+            if chunkname.nil? or chunksize.nil?
+              return 0
+            end
+            if chunkname == 'data'
+              # This is a data chunk; we've found the start of the real audio data
+              return file.tell
+            end
+            file.seek(chunksize, IO::SEEK_CUR)
+          end
+          return 0
+        end
       end
     end
   end

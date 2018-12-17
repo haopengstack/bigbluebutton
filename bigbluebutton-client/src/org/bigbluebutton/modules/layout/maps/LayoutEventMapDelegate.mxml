@@ -18,37 +18,44 @@ You should have received a copy of the GNU Lesser General Public License along
 with BigBlueButton; if not, see <http://www.gnu.org/licenses/>.
 
 -->
-<EventMap xmlns:mx="http://www.adobe.com/2006/mxml" xmlns="http://mate.asfusion.com/">
-	<mx:Script>
+<EventMap xmlns:mx="library://ns.adobe.com/flex/mx" xmlns:fx="http://ns.adobe.com/mxml/2009" xmlns="http://mate.asfusion.com/">
+	<fx:Script>
 		<![CDATA[
 			import com.asfusion.mate.events.Dispatcher;
 			
+			import org.bigbluebutton.common.Role;
 			import org.bigbluebutton.common.events.ToolbarButtonEvent;
-			import org.bigbluebutton.main.model.LayoutOptions;
+			import org.bigbluebutton.core.Options;
+			import org.bigbluebutton.main.model.options.LayoutOptions;
+			import org.bigbluebutton.main.model.users.events.ChangeMyRole;
+			import org.bigbluebutton.modules.layout.model.LayoutModuleOptions;
 			import org.bigbluebutton.modules.layout.views.ToolbarComponent;
 			
-			private var _attributes:Object;
 			private var _globalDispatcher:Dispatcher = new Dispatcher();
-			private var options:LayoutOptions = new LayoutOptions();
+			private var options:LayoutOptions;
+			private var moduleOptions:LayoutModuleOptions;
+			private var layoutComponent:ToolbarComponent;
 			
 			public function stopModule():void {
 			}
 			
-			public function startModule(attributes:Object):void {
-				_attributes = attributes;
-				options.parseOptions();
+			public function startModule():void {
+				options = Options.getOptions(LayoutOptions) as LayoutOptions;
+				moduleOptions = Options.getOptions(LayoutModuleOptions) as LayoutModuleOptions;
 				
-				var layoutComponent:ToolbarComponent = new ToolbarComponent();
-				
-				// using the negation will keep it enabled if the property is not there
-				layoutComponent.enableEdit = !(_attributes.enableEdit == "false");
-				layoutComponent.visibleTools = options.showLayoutTools;
+				layoutComponent = new ToolbarComponent();
+				layoutComponent.enableEdit = moduleOptions.enableEdit;
+				layoutComponent.visibleTools(options.showLayoutTools);
 				var event:ToolbarButtonEvent = new ToolbarButtonEvent(ToolbarButtonEvent.ADD);
 				event.button = layoutComponent;
 				event.location = ToolbarButtonEvent.BOTTOM_TOOLBAR;
 				_globalDispatcher.dispatchEvent(event);
-				
+			}
+
+			public function refreshRole(e:ChangeMyRole):void {
+				//layoutComponent.enableEdit = !(_attributes.enableEdit == "false");
+				layoutComponent.refreshRole(e.role == Role.MODERATOR);
 			}
 		]]>
-	</mx:Script>
+	</fx:Script>
 </EventMap>

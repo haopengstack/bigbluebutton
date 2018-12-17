@@ -11,8 +11,11 @@ package org.bigbluebutton.modules.videoconf.views
   import org.as3commons.logging.api.ILogger;
   import org.as3commons.logging.api.getClassLogger;
   import org.bigbluebutton.core.BBB;
+  import org.bigbluebutton.core.UsersUtil;
+  import org.bigbluebutton.core.model.LiveMeeting;
   import org.bigbluebutton.core.model.VideoProfile;
   import org.bigbluebutton.main.events.BBBEvent;
+  import org.bigbluebutton.main.events.StartedViewingWebcamEvent;
   import org.bigbluebutton.main.events.StoppedViewingWebcamEvent;
   import org.bigbluebutton.main.views.VideoWithWarnings;
   import org.bigbluebutton.modules.videoconf.events.StartBroadcastEvent;
@@ -40,7 +43,11 @@ package org.bigbluebutton.modules.videoconf.views
 
     public function publish(camIndex:int, videoProfile:VideoProfile, streamName:String):void {
       if (_shuttingDown) {
-        LOGGER.warn("Method publish called while shutting down the video window, ignoring...");
+        var logData:Object = UsersUtil.initLogData();
+        logData.streamId = streamName;
+        logData.tags = ["video"];
+        logData.logCode = "publish_while_shutting_video_window";
+        LOGGER.warn(JSON.stringify(logData));
         return;
       }
 
@@ -62,23 +69,43 @@ package org.bigbluebutton.modules.videoconf.views
        */   
       var d:Date = new Date();
       var curTime:Number = d.getTime(); 
-      return profile.id + "-" + userId + "-" + curTime;
+      var streamId: String = profile.id + "-" + userId + "-" + curTime;
+       if (UsersUtil.isRecorded()) {
+          // Append recorded to stream name to tell server to record this stream.
+          // ralam (feb 27, 2017)
+          streamId += "-recorded";
+        }
+        
+        return streamId;
     }
 
     public static function getVideoProfile(stream:String):VideoProfile {
-      LOGGER.debug("Parsing stream name [{0}]", [stream]);
+			var logData:Object = UsersUtil.initLogData();
+			logData.tags = ["webcam"];
+			logData.app = "video";
+			logData.streamId = stream;
+			
       var pattern:RegExp = new RegExp("([A-Za-z0-9]+)-([A-Za-z0-9_]+)-\\d+", "");
       if (pattern.test(stream)) {
-        LOGGER.debug("The stream name is well formatted");
-        LOGGER.debug("Video profile resolution is [{0}]", [pattern.exec(stream)[1]]);
-        LOGGER.debug("Userid [{0}]", [pattern.exec(stream)[2]]);
-        return BBB.getVideoProfileById(pattern.exec(stream)[1]);
+
+				var vidProfile:VideoProfile = BBB.getVideoProfileById(pattern.exec(stream)[1]);
+				
+				logData.vidProfile = vidProfile.vidProfileInfo();
+				logData.logCode = "get_video_profile";
+				LOGGER.info(JSON.stringify(logData));
+				
+        return vidProfile;
       } else {
-        LOGGER.debug("Bad stream name format");
+
         var profile:VideoProfile = BBB.defaultVideoProfile;
         if (profile == null) {
           profile = BBB.fallbackVideoProfile;
         }
+				
+				logData.vidProfile = profile.vidProfileInfo();
+				logData.logCode = "get_video_profile_failed";
+				LOGGER.info(JSON.stringify(logData));
+				
         return profile;
       }
     }
@@ -113,13 +140,29 @@ package org.bigbluebutton.modules.videoconf.views
     }
 
     private function stopViewing():void {
+        // Store that I stopped viewing this streamId;
+        var myUserId: String = UsersUtil.getMyUserID();
+        LiveMeeting.inst().webcams.stoppedViewingStream(myUserId, _streamName);
+        
       var stopEvent:StoppedViewingWebcamEvent = new StoppedViewingWebcamEvent();
-      stopEvent.webcamUserID = user.userID;
+      stopEvent.webcamUserID = user.intId;
       stopEvent.streamName = _streamName;
       _dispatcher.dispatchEvent(stopEvent); 
-      user.removeViewingStream(_streamName);
+      
     }
 
+    private function startedViewing():void {
+        // Store that I started viewing this streamId;
+        var myUserId: String = UsersUtil.getMyUserID();
+        LiveMeeting.inst().webcams.startedViewingStream(myUserId, _streamName);
+        
+        var startEvent:StartedViewingWebcamEvent = new StartedViewingWebcamEvent();
+        startEvent.webcamUserID = user.intId;
+        startEvent.streamName = _streamName;
+        _dispatcher.dispatchEvent(startEvent); 
+        
+    }
+    
     private function stopPublishing():void {
       var e:StopBroadcastEvent = new StopBroadcastEvent();
       e.stream = _streamName;
@@ -129,7 +172,11 @@ package org.bigbluebutton.modules.videoconf.views
 
     public function view(connection:NetConnection, streamName:String):void {
       if (_shuttingDown) {
-        LOGGER.warn("Method view called while shutting down the video window, ignoring...");
+        var logData:Object = UsersUtil.initLogData();
+        logData.streamId = streamName;
+        logData.tags = ["video"];
+        logData.logCode = "view_while_shutting_video_window";
+        LOGGER.warn(JSON.stringify(logData));
         return;
       }
 
@@ -145,7 +192,7 @@ package org.bigbluebutton.modules.videoconf.views
       _ns.receiveAudio(false);
       
       _videoProfile = UserVideo.getVideoProfile(streamName);
-      LOGGER.debug("Remote video profile: {0}", [_videoProfile.toString()]);
+
       if (_videoProfile == null) {
         throw("Invalid video profile");
         return;
@@ -158,7 +205,7 @@ package org.bigbluebutton.modules.videoconf.views
         var filter:ConvolutionFilter = new ConvolutionFilter();
         filter.matrixX = 3;
         filter.matrixY = 3;
-        LOGGER.debug("Applying convolution filter =[{0}]", [options.convolutionFilter]);
+
         filter.matrix = options.convolutionFilter;
         filter.bias =  options.filterBias;
         filter.divisor = options.filterDivisor;
@@ -167,37 +214,52 @@ package org.bigbluebutton.modules.videoconf.views
       
       _ns.play(streamName);
 
-      user.addViewingStream(streamName);
+      startedViewing();
+      
       invalidateDisplayList();
     }
 
     private function onNetStatus(e:NetStatusEvent):void{
+			var logData:Object = UsersUtil.initLogData();
+			logData.streamId = streamName;
+			logData.tags = ["video"];
+			
       switch(e.info.code){
         case "NetStream.Publish.Start":
-          LOGGER.debug("NetStream.Publish.Start for broadcast stream {0}", [_streamName]);
+					logData.logCode = "netstream_publish_start";
+					LOGGER.warn(JSON.stringify(logData));
           break;
         case "NetStream.Play.UnpublishNotify":
+					logData.logCode = "netstream_play_unpublish_notify";
+					LOGGER.warn(JSON.stringify(logData));
           shutdown();
           break;
         case "NetStream.Play.Start":
-			LOGGER.debug("Netstatus: {0}", [e.info.code ]);
+					logData.logCode = "netstream_play_start";
+					LOGGER.warn(JSON.stringify(logData));
           _dispatcher.dispatchEvent(new BBBEvent(BBBEvent.VIDEO_STARTED));
           break;
         case "NetStream.Play.FileStructureInvalid":
-		  LOGGER.error("The MP4's file structure is invalid.");
+					logData.logCode = "netstream_play_invalid_file_structure";
+					LOGGER.warn(JSON.stringify(logData));
           break;
         case "NetStream.Play.NoSupportedTrackFound":
-		  LOGGER.error("The MP4 doesn't contain any supported tracks");
+					logData.logCode = "netstream_play_unsupported_track";
+					LOGGER.warn(JSON.stringify(logData));
           break;
       }
     }
 
     private function onAsyncError(e:AsyncErrorEvent):void{
-		LOGGER.debug(e.text);
+			var logData:Object = UsersUtil.initLogData();
+			logData.streamId = streamName;
+			logData.tags = ["video"];
+			logData.logCode = "netstream_async_error";
+			LOGGER.warn(JSON.stringify(logData));
     }
     
-    private function onMetaData(info:Object):void {
-		LOGGER.debug("width={0} height={1}", [info.width, info.height]);
+    public function onMetaData(info:Object):void {
+		LOGGER.debug("onMetaData :: " + JSON.stringify(info));
     }
 
     override protected function updateDisplayList(unscaledWidth:Number, unscaledHeight:Number):void {

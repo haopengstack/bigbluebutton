@@ -1,7 +1,9 @@
 <?xml version="1.0" encoding="utf-8"?>
-<mx:Application xmlns:mx="http://www.adobe.com/2006/mxml" layout="absolute" minWidth="955" minHeight="600"
+<mx:Application xmlns:mx="library://ns.adobe.com/flex/mx"
+				xmlns:fx="http://ns.adobe.com/mxml/2009"
+				layout="absolute" minWidth="955" minHeight="600"
                 applicationComplete="appInit()">
-  <mx:Script>
+  <fx:Script>
     <![CDATA[
       private function appInit():void {
         if (ExternalInterface.available) {
@@ -44,7 +46,9 @@
         rtmp = testRTMP;
         
         netConnection = new NetConnection();
-	netConnection.proxyType = "best";
+
+				netConnection.proxyType = "best";
+				netConnection.objectEncoding = ObjectEncoding.AMF3;
         netConnection.client = this;
         
         netConnection.addEventListener(NetStatusEvent.NET_STATUS, connectionHandler);
@@ -161,5 +165,5 @@
       }
 
     ]]>
-  </mx:Script>  
+  </fx:Script>  
 </mx:Application>

@@ -127,6 +127,21 @@
     }
 
     /**
+     * Query user's sessionToken.
+     *
+     * Params:
+     *    callback - function if you want a callback as response.
+     */
+    BBB.getSessionToken = function(callback) {
+      var swfObj = getSwfObj();
+      if (swfObj) {
+        if (typeof callback === 'function') {
+          callback(swfObj.getSessionToken());
+        }
+      }
+    }
+    
+    /**
      * Eject a user.
      *
      * Params:
@@ -420,6 +435,10 @@
      *
      */
      
+    BBB.webRTCCallSucceeded = function() {
+      // do nothing on this callback
+    }
+
     BBB.webRTCCallStarted = function(inEchoTest) {
       var swfObj = getSwfObj();
       if (swfObj) {
@@ -489,14 +508,29 @@
         swfObj.webRTCMediaFail();
       }
     }
-    
-    BBB.javaAppletLaunched = function() {
+
+    BBB.webRTCMonitorUpdate = function(result) {
       var swfObj = getSwfObj();
       if (swfObj) {
-        swfObj.javaAppletLaunched();
+        swfObj.webRTCMonitorUpdate(result);
       }
     }
     
+    BBB.onMessageFromDS = function(data) {
+      var swfObj = getSwfObj();
+      if (swfObj) {
+        swfObj.onMessageFromDS(data);
+      }
+    }
+    
+    BBB.connectedToVertx = function() {
+      var swfObj = getSwfObj();
+      if (swfObj) {
+        swfObj.connectedToVertx();
+      }
+    }
+
+
     // Third-party JS apps should use this to query if the BBB SWF file is ready to handle calls.
     BBB.isSwfClientReady = function() {
       return swfReady;
@@ -567,7 +601,41 @@
       console.log("Received [" + bbbEvent.eventName + "]");
       broadcast(bbbEvent);
     }
-
+  
+  /**
+    BBB.loginToDeepstream = function(meetingId) {
+        console.log("***** LOGGING TO DS " + meetingId)
+        dsclient.login()
+        dsclient.event.subscribe("foo-bar", function (data) {
+         // console.log(data);
+          BBB.onMessageFromDS(data);
+          })
+    }
+    **/
+/**    
+    const eb = new vertx.EventBus("http://192.168.216.128:3001/eventbus");
+    eb.onopen = function () {
+      console.log("FOOOO!!!!!");
+    };
+        
+    var token = null;
+        
+    BBB.sendAuthToken = function(data) {
+    token = data;
+      eb.registerHandler("to-client-" + data, function (msg) {
+      	//console.log("From server: " + JSON.stringify(msg) + "\n");
+        BBB.onMessageFromDS(msg);
+      });
+      
+      BBB.connectedToVertx();
+    }
+      
+    BBB.sendToDeepstream = function(data) {
+ //   trace("SENDING " + data);
+   // 	var json = JSON.parse(data);
+      eb.send("to-server", data);
+    };
+**/    
     
     // Flag to indicate that the SWF file has been loaded and ready to handle calls.
     var swfReady = false;
@@ -649,4 +717,3 @@
 
     window.BBB = BBB;
 })(this);
-

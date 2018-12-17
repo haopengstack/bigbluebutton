@@ -22,23 +22,27 @@ package org.bigbluebutton.main.api
   
   import flash.external.ExternalInterface;
   
+  import mx.collections.ArrayCollection;
+  
   import org.as3commons.logging.api.ILogger;
   import org.as3commons.logging.api.getClassLogger;
+  import org.bigbluebutton.core.BBB;
   import org.bigbluebutton.core.EventConstants;
+  import org.bigbluebutton.core.Options;
   import org.bigbluebutton.core.UsersUtil;
   import org.bigbluebutton.core.events.AmIPresenterQueryEvent;
   import org.bigbluebutton.core.events.AmISharingWebcamQueryEvent;
   import org.bigbluebutton.core.events.CoreEvent;
+  import org.bigbluebutton.core.events.FullscreenToggledEvent;
   import org.bigbluebutton.core.events.GetMyUserInfoRequestEvent;
   import org.bigbluebutton.core.events.IsUserPublishingCamRequest;
   import org.bigbluebutton.core.events.VoiceConfEvent;
-  import org.bigbluebutton.core.managers.UserManager;
+  import org.bigbluebutton.core.managers.ConnectionManager;
   import org.bigbluebutton.core.vo.CameraSettingsVO;
   import org.bigbluebutton.main.events.BBBEvent;
   import org.bigbluebutton.main.model.users.events.EmojiStatusEvent;
   import org.bigbluebutton.main.model.users.events.KickUserEvent;
   import org.bigbluebutton.main.model.users.events.RoleChangeEvent;
-  import org.bigbluebutton.modules.deskshare.events.DeskshareAppletLaunchedEvent;
   import org.bigbluebutton.modules.phone.events.AudioSelectionWindowEvent;
   import org.bigbluebutton.modules.phone.events.WebRTCCallEvent;
   import org.bigbluebutton.modules.phone.events.WebRTCEchoTestEvent;
@@ -88,11 +92,11 @@ package org.bigbluebutton.main.api
         ExternalInterface.addCallback("stopShareCameraRequest", handleStopShareCameraRequest);
         ExternalInterface.addCallback("switchLayout", handleSwitchLayoutRequest);
         ExternalInterface.addCallback("sendPublicChatRequest", handleSendPublicChatRequest);  
-        ExternalInterface.addCallback("sendPrivateChatRequest", handleSendPrivateChatRequest); 
         ExternalInterface.addCallback("lockLayout", handleSendLockLayoutRequest);
         ExternalInterface.addCallback("displayPresentationRequest", handleDisplayPresentationRequest);
         ExternalInterface.addCallback("deletePresentationRequest", handleDeletePresentationRequest);
         ExternalInterface.addCallback("queryListsOfPresentationsRequest", handleQueryListsOfPresentationsRequest);
+        ExternalInterface.addCallback("fullscreenToggled", handleFullscreenToggled);
 
         ExternalInterface.addCallback("webRTCCallStarted", handleWebRTCCallStarted);
         ExternalInterface.addCallback("webRTCCallConnecting", handleWebRTCCallConnecting);
@@ -103,7 +107,11 @@ package org.bigbluebutton.main.api
         ExternalInterface.addCallback("webRTCMediaRequest", handleWebRTCMediaRequest);
         ExternalInterface.addCallback("webRTCMediaSuccess", handleWebRTCMediaSuccess);
         ExternalInterface.addCallback("webRTCMediaFail", handleWebRTCMediaFail);
-        ExternalInterface.addCallback("javaAppletLaunched", handleJavaAppletLaunched);
+        ExternalInterface.addCallback("getSessionToken", handleGetSessionToken);
+        ExternalInterface.addCallback("webRTCMonitorUpdate", handleWebRTCMonitorUpdate);
+		
+		ExternalInterface.addCallback("onMessageFromDS", handleOnMessageFromDS);
+		ExternalInterface.addCallback("connectedToVertx", handleOnConnectedToVertx);
       }
       
       // Tell out JS counterpart that we are ready.
@@ -113,17 +121,17 @@ package org.bigbluebutton.main.api
     }
 
     private function handleQueryListsOfPresentationsRequest():void {    
-      _dispatcher.dispatchEvent(new GetListOfPresentationsRequest());
+      _dispatcher.dispatchEvent(new GetListOfPresentationsRequest("UNKNOWN"));
     }
         
     private function handleDisplayPresentationRequest(presentationID:String):void {
-      var readyEvent:UploadEvent = new UploadEvent(UploadEvent.PRESENTATION_READY);
+      var readyEvent:UploadEvent = new UploadEvent(UploadEvent.PRESENTATION_READY, "DEFAULT_PRESENTATION_POD");
       readyEvent.presentationName = presentationID;
       _dispatcher.dispatchEvent(readyEvent);
     }
     
     private function handleDeletePresentationRequest(presentationID:String):void {
-      var rEvent:RemovePresentationEvent = new RemovePresentationEvent(RemovePresentationEvent.REMOVE_PRESENTATION_EVENT);
+      var rEvent:RemovePresentationEvent = new RemovePresentationEvent(RemovePresentationEvent.REMOVE_PRESENTATION_EVENT, "unknown");
       rEvent.presentationName = presentationID;
       _dispatcher.dispatchEvent(rEvent);
     }
@@ -151,12 +159,12 @@ package org.bigbluebutton.main.api
       var obj:Object = new Object();
       var isUserPublishing:Boolean = false;
       
-      var streamNames:Array = UsersUtil.getWebcamStream(userID);
+      var streamNames:Array = UsersUtil.getWebcamStreamsFor(userID);
       if (streamNames && streamNames.length > 0) {
         isUserPublishing = true; 
       }
       
-      var vidConf:VideoConfOptions = new VideoConfOptions();
+      var vidConf:VideoConfOptions = Options.getOptions(VideoConfOptions) as VideoConfOptions;
       obj.uri = vidConf.uri + "/" + UsersUtil.getInternalMeetingID();
       obj.userID = userID;
       obj.isUserPublishing = isUserPublishing;
@@ -187,24 +195,36 @@ package org.bigbluebutton.main.api
     
     private function handleAmISharingCameraRequestSync():Object {
       var obj:Object = new Object();
-      var camSettings:CameraSettingsVO = UsersUtil.amIPublishing();
-      obj.isPublishing = camSettings.isPublishing;
-      obj.camIndex = camSettings.camIndex;
-      obj.camWidth = camSettings.videoProfile.width;
-      obj.camHeight = camSettings.videoProfile.height;
-      obj.camKeyFrameInterval = camSettings.videoProfile.keyFrameInterval;
-      obj.camModeFps = camSettings.videoProfile.modeFps;
-      obj.camQualityBandwidth = camSettings.videoProfile.qualityBandwidth;
-      obj.camQualityPicture = camSettings.videoProfile.qualityPicture;
-      obj.avatarURL = UsersUtil.getAvatarURL();
-      
+      var camArray: ArrayCollection = new ArrayCollection();
+
+      var camSettingsArray:ArrayCollection = UsersUtil.myCamSettings();
+      for (var i:int = 0; i < camSettingsArray.length; i++) {
+        var camSettings:CameraSettingsVO = camSettingsArray.getItemAt(i) as CameraSettingsVO;
+        var cam:Object = new Object();
+
+        cam.isPublishing = camSettings.isPublishing;
+        cam.camIndex = camSettings.camIndex;
+        cam.camWidth = camSettings.videoProfile.width;
+        cam.camHeight = camSettings.videoProfile.height;
+        cam.camKeyFrameInterval = camSettings.videoProfile.keyFrameInterval;
+        cam.camModeFps = camSettings.videoProfile.modeFps;
+        cam.camQualityBandwidth = camSettings.videoProfile.qualityBandwidth;
+        cam.camQualityPicture = camSettings.videoProfile.qualityPicture;
+        cam.avatarURL = UsersUtil.getAvatarURL();
+        camArray.addItem(cam);
+      }
+
+      obj.cameras = camArray;
       return obj;
     }
     
     private function handleAmISharingCameraRequestAsync():void {
       _dispatcher.dispatchEvent(new AmISharingWebcamQueryEvent());
     }
-    
+
+    private function handleFullscreenToggled(isNowFullscreen: Boolean):void {
+      _dispatcher.dispatchEvent(new FullscreenToggledEvent(isNowFullscreen));
+    }
 
     private function handleAmIPresenterRequestSync():Boolean {
       return UsersUtil.amIPresenter();
@@ -239,12 +259,17 @@ package org.bigbluebutton.main.api
     }
     
     private function handleGetExternalMeetingID():String {
-      return UserManager.getInstance().getConference().externalMeetingID;
+      return UsersUtil.getExternalMeetingID();
     }
 
     private function handleGetInternalMeetingID():String {
-      return UserManager.getInstance().getConference().internalMeetingID;
+      return UsersUtil.getInternalMeetingID();
     }
+    
+    private function handleGetSessionToken():String {
+      return BBB.getQueryStringParameters().getSessionToken();
+    }
+    
     
     private function handleSendLockLayoutRequest(lock:Boolean):void {
       if (lock) {
@@ -275,7 +300,6 @@ package org.bigbluebutton.main.api
       
       var now:Date = new Date();
       payload.fromTime = now.getTime();
-      payload.fromTimezoneOffset = now.getTimezoneOffset();
       
       payload.message = message;
       
@@ -288,35 +312,6 @@ package org.bigbluebutton.main.api
       
       _dispatcher.dispatchEvent(chatEvent);
     }
-    
-    /**
-     * Request to send a private chat
-     *  fromUserID - the external user id for the sender
-     *  fontColor  - the color of the font to display the message
-     *  localeLang - the 2-char locale code (e.g. en) for the sender
-     *  message    - the message to send
-     *  toUserID   - the external user id of the receiver
-     */
-    private function handleSendPrivateChatRequest(fontColor:String, localeLang:String, message:String, toUserID:String):void {
-      var chatEvent:CoreEvent = new CoreEvent(EventConstants.SEND_PRIVATE_CHAT_REQ);      
-      var payload:Object = new Object();      
-      payload.fromColor = fontColor;
-      payload.fromLang = localeLang;
-      
-      var now:Date = new Date();
-      payload.fromTime = now.getTime();
-      payload.fromTimezoneOffset = now.getTimezoneOffset();
-      
-      payload.message = message;
-      payload.fromUserID = UsersUtil.getMyUserID();
-      payload.fromUsername = UsersUtil.getUserName(payload.fromUserID);
-      payload.toUserID = toUserID;
-      payload.toUsername = UsersUtil.getUserName(payload.toUserID);
-      
-      chatEvent.message = payload;
-      
-      _dispatcher.dispatchEvent(chatEvent);
-    }      
 
     private function handleSwitchLayoutRequest(newLayout:String):void {
       var layoutEvent:CoreEvent = new CoreEvent(EventConstants.SWITCH_LAYOUT_REQ);
@@ -334,20 +329,20 @@ package org.bigbluebutton.main.api
     
     private function handleMuteMeRequest():void {
       var e:VoiceConfEvent = new VoiceConfEvent(VoiceConfEvent.MUTE_USER);
-      e.userid = UserManager.getInstance().getConference().getMyUserId();
+      e.userid = UsersUtil.getMyUserID();
       e.mute = true;
       _dispatcher.dispatchEvent(e);
     }
 
     private function handleUnmuteMeRequest():void {
       var e:VoiceConfEvent = new VoiceConfEvent(VoiceConfEvent.MUTE_USER);
-      e.userid = UserManager.getInstance().getConference().getMyUserId();
+      e.userid = UsersUtil.getMyUserID();
       e.mute = false;
       _dispatcher.dispatchEvent(e);
     }
     
     private function handleGetMyRoleRequestSync():String {
-      return UserManager.getInstance().getConference().whatsMyRole();
+      return UsersUtil.getMyRole();
     }
     
     private function handleGetMyRoleRequestAsynch():void {
@@ -428,10 +423,25 @@ package org.bigbluebutton.main.api
     private function handleWebRTCMediaFail():void {
       _dispatcher.dispatchEvent(new WebRTCMediaEvent(WebRTCMediaEvent.WEBRTC_MEDIA_FAIL));
     }
+
+    private function handleWebRTCMonitorUpdate(results:String):void {
+      var e:BBBEvent = new BBBEvent(BBBEvent.WEBRTC_MONITOR_UPDATE_EVENT);
+      e.payload.results = results;
+      _dispatcher.dispatchEvent(e);
+    }
 	
-	private function handleJavaAppletLaunched():void
-	{
-		_dispatcher.dispatchEvent(new DeskshareAppletLaunchedEvent(DeskshareAppletLaunchedEvent.APPLET_LAUNCHED));
-	}
+	private function handleOnMessageFromDS(msg: Object):void {
+		trace("FROM VERTX");
+		var _nc:ConnectionManager = BBB.initConnectionManager();
+		_nc.onMessageFromDS(msg);
+	}	
+	
+	private function handleOnConnectedToVertx():void {
+		var _nc:ConnectionManager = BBB.initConnectionManager();
+		_nc.connectedToVertx();
+	}		
+	
+	
+	
   }
 }

@@ -81,4 +81,3 @@ end
 
 cleanProcessedFiles(PUBLISHED_DIR)
 cleanProcessedFiles(UNPUBLISHED_DIR)
-

@@ -1,21 +1,21 @@
 /**
-* BigBlueButton open source conferencing system - http://www.bigbluebutton.org/
-* 
-* Copyright (c) 2012 BigBlueButton Inc. and by respective authors (see below).
-*
-* This program is free software; you can redistribute it and/or modify it under the
-* terms of the GNU Lesser General Public License as published by the Free Software
-* Foundation; either version 3.0 of the License, or (at your option) any later
-* version.
-* 
-* BigBlueButton is distributed in the hope that it will be useful, but WITHOUT ANY
-* WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
-* PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
-*
-* You should have received a copy of the GNU Lesser General Public License along
-* with BigBlueButton; if not, see <http://www.gnu.org/licenses/>.
-*
-*/
+ * BigBlueButton open source conferencing system - http://www.bigbluebutton.org/
+ * 
+ * Copyright (c) 2012 BigBlueButton Inc. and by respective authors (see below).
+ *
+ * This program is free software; you can redistribute it and/or modify it under the
+ * terms of the GNU Lesser General Public License as published by the Free Software
+ * Foundation; either version 3.0 of the License, or (at your option) any later
+ * version.
+ * 
+ * BigBlueButton is distributed in the hope that it will be useful, but WITHOUT ANY
+ * WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR A
+ * PARTICULAR PURPOSE. See the GNU Lesser General Public License for more details.
+ *
+ * You should have received a copy of the GNU Lesser General Public License along
+ * with BigBlueButton; if not, see <http://www.gnu.org/licenses/>.
+ *
+ */
 package org.bigbluebutton.main.model.users
 {
 	import com.asfusion.mate.events.Dispatcher;
@@ -30,20 +30,18 @@ package org.bigbluebutton.main.model.users
 	
 	import org.as3commons.logging.api.ILogger;
 	import org.as3commons.logging.api.getClassLogger;
-	import org.as3commons.logging.util.jsonXify;
-	import org.bigbluebutton.core.model.MeBuilder;
-	import org.bigbluebutton.core.model.MeetingBuilder;
-	import org.bigbluebutton.core.model.MeetingModel;
-	import org.bigbluebutton.core.model.users.UsersModel;
+	import org.bigbluebutton.core.BBB;
+	import org.bigbluebutton.core.UsersUtil;
 	import org.bigbluebutton.main.events.MeetingNotFoundEvent;
 	import org.bigbluebutton.main.model.users.events.ConnectionFailedEvent;
-        	
+	import org.bigbluebutton.util.i18n.ResourceUtil;
+
 	public class JoinService
 	{  
 		private static const LOGGER:ILogger = getClassLogger(JoinService);      
-    
+		
 		private var request:URLRequest = new URLRequest();
-		private var vars:URLVariables = new URLVariables();
+		private var reqVars:URLVariables = new URLVariables();
 		
 		private var urlLoader:URLLoader;
 		private var _resultListener:Function;
@@ -53,16 +51,21 @@ package org.bigbluebutton.main.model.users
 		}
 		
 		public function load(url:String):void {
+			var sessionToken:String = BBB.getQueryStringParameters().getSessionToken();
+			
+			reqVars.sessionToken = sessionToken;
+			
 			var date:Date = new Date();
-      request = new URLRequest(url);
-      request.method = URLRequestMethod.GET;		
-            
+			request = new URLRequest(url);
+			request.method = URLRequestMethod.GET;
+			request.data = reqVars;
+			
 			urlLoader.addEventListener(Event.COMPLETE, handleComplete);
 			urlLoader.addEventListener(HTTPStatusEvent.HTTP_STATUS, httpStatusHandler);
 			urlLoader.addEventListener(IOErrorEvent.IO_ERROR, ioErrorHandler);
-      urlLoader.load(request);	
+			urlLoader.load(request);	
 		}
-
+		
 		public function addJoinResultListener(listener:Function):void {
 			_resultListener = listener;
 		}
@@ -70,83 +73,119 @@ package org.bigbluebutton.main.model.users
 		private function httpStatusHandler(event:HTTPStatusEvent):void {
 			LOGGER.debug("httpStatusHandler: {0}", [event]);
 		}
-
+		
 		private function ioErrorHandler(event:IOErrorEvent):void {
-			LOGGER.error("ioErrorHandler: {0}", [event]);
+			var logData:Object = UsersUtil.initLogData();
+			logData.tags = ["initialization"];
+			logData.logCode = "enter_api_io_error"; 
+			LOGGER.error(JSON.stringify(logData));
+			
 			var e:ConnectionFailedEvent = new ConnectionFailedEvent(ConnectionFailedEvent.USER_LOGGED_OUT);
 			var dispatcher:Dispatcher = new Dispatcher();
 			dispatcher.dispatchEvent(e);
 		}
 		
+		private function processLogoutUrl(confInfo:Object):String {
+			var logoutUrl:String = confInfo.logoutUrl;
+			var rules:Object = {
+				"%%FULLNAME%%": confInfo.username,
+					"%%CONFNAME%%": confInfo.conferenceName,
+					"%%DIALNUM%%": confInfo.dialnumber,
+					"%%CONFNUM%%": confInfo.voicebridge
+			}
+			
+			for (var attr:String in rules) {
+				logoutUrl = logoutUrl.replace(new RegExp(attr, "g"), rules[attr]);
+			}
+			
+			return logoutUrl;
+		}
+		
+		private function extractMetadata(metadata:Object):Object {
+			var response:Object = new Object();
+			if (metadata) {
+				var data:Array = metadata as Array;
+				for each (var item:Object in data) {
+					for (var id:String in item) {
+						var value:String = item[id] as String;
+						response[id] = value;
+					}
+				}
+			}
+			return response;
+		}
+		
 		private function handleComplete(e:Event):void {			
-      var result:Object = JSON.parse(e.target.data);
-      LOGGER.debug("Enter response = {0}" + [jsonXify(result)]);
-            
+			var result:Object = JSON.parse(e.target.data);
+			
+			var logData:Object = UsersUtil.initLogData();
+			logData.tags = ["initialization"];
+			
+			
 			var returncode:String = result.response.returncode;
 			if (returncode == 'FAILED') {
-				LOGGER.error("Join FAILED = {0}", [jsonXify(result)]);						
-        var dispatcher:Dispatcher = new Dispatcher();
-        dispatcher.dispatchEvent(new MeetingNotFoundEvent(result.response.logoutURL));			
+				logData.logCode = "enter_api_failed"; 
+				LOGGER.info(JSON.stringify(logData));
+				
+				var dispatcher:Dispatcher = new Dispatcher();
+				dispatcher.dispatchEvent(new MeetingNotFoundEvent(ResourceUtil.getInstance().getString('bbb.mainshell.enterAPIFailed')));			
 			} else if (returncode == 'SUCCESS') {
-				LOGGER.debug("Join SUCESS = {0}", [jsonXify(result)]);
-        var response:Object = new Object();
-        response.username = result.response.fullname;
-        response.conference = result.response.conference; 
-        response.conferenceName = result.response.confname;
-        response.externMeetingID = result.response.externMeetingID;
-        response.meetingID = result.response.meetingID;
-        response.externUserID = result.response.externUserID;
-        response.internalUserId = result.response.internalUserID;
-        response.role = result.response.role;
-        response.room = result.response.room;
-        response.authToken = result.response.authToken;
-        response.record = result.response.record;
-        response.allowStartStopRecording = result.response.allowStartStopRecording;
-        response.webvoiceconf = result.response.webvoiceconf;
-        response.dialnumber = result.response.dialnumber;
-        response.voicebridge = result.response.voicebridge;
-        response.mode = result.response.mode;
-        response.welcome = result.response.welcome;
-        response.logoutUrl = result.response.logoutUrl;
-        response.defaultLayout = result.response.defaultLayout;
-        response.avatarURL = result.response.avatarURL
-        
-        if (result.response.hasOwnProperty("modOnlyMessage")) {
-          response.modOnlyMessage = result.response.modOnlyMessage;
-          MeetingModel.getInstance().modOnlyMessage = response.modOnlyMessage;
-        }
-          
-        response.customdata = new Object();
-       
+				logData.logCode = "enter_api_succeeded"; 
+				LOGGER.info(JSON.stringify(logData));
+				
+				var apiResponse:EnterApiResponse = new EnterApiResponse();
+				apiResponse.meetingName = result.response.confname;
+				apiResponse.extMeetingId = result.response.externMeetingID;
+				apiResponse.intMeetingId = result.response.meetingID;
+				apiResponse.isBreakout = result.response.isBreakout;
+				
+				apiResponse.username = result.response.fullname;
+				apiResponse.extUserId = result.response.externUserID;
+				apiResponse.intUserId = result.response.internalUserID;
+				apiResponse.role = result.response.role;
+				apiResponse.guest = result.response.guest;
+				apiResponse.authed = result.response.authed;
+				apiResponse.authToken = result.response.authToken;
+				
+				apiResponse.record = (result.response.record.toUpperCase() == "TRUE");
+				apiResponse.allowStartStopRecording = result.response.allowStartStopRecording;
+				
+				apiResponse.dialnumber = result.response.dialnumber;
+				apiResponse.voiceConf = result.response.voicebridge;
+				
+				apiResponse.welcome = result.response.welcome;
+				apiResponse.logoutUrl = processLogoutUrl(result.response);
+				apiResponse.logoutTimer = result.response.logoutTimer;
+				apiResponse.defaultLayout = result.response.defaultLayout;
+				apiResponse.avatarURL = result.response.avatarURL;
+				
+				apiResponse.customdata = new Object();
+				
 				if (result.response.customdata) {
-          var cdata:Array = result.response.customdata as Array;
-          for each (var item:Object in cdata) {
-            for (var id:String in item) {
-              var value:String = item[id] as String;
-              response.customdata[id] = value;
-            }                        
-          }
+					var cdata:Array = result.response.customdata as Array;
+					for each (var item:Object in cdata) {
+						for (var id:String in item) {
+							var value:String = item[id] as String;
+							apiResponse.customdata[id] = value;
+						}
+					}
 				}
-				        
-        UsersModel.getInstance().me = new MeBuilder(response.internalUserId, response.username).withAvatar(response.avatarURL)
-                                             .withExternalId(response.externUserID).withToken(response.authToken)
-                                             .withLayout(response.defaultLayout).withWelcome(response.welcome)
-                                             .withDialNumber(response.dialnumber).withRole(response.role)
-                                             .withCustomData(response.customData).build();
-                
-        MeetingModel.getInstance().meeting = new MeetingBuilder(response.conference, response.conferenceName)
-                                             .withDefaultLayout(response.defaultLayout).withVoiceConf(response.voiceBridge)
-                                             .withExternalId(response.externMeetingID).withRecorded(response.record.toUpperCase() == "TRUE")
-                                             .withDefaultAvatarUrl(response.avatarURL).withDialNumber(response.dialNumber)
-                                             .withWelcomeMessage(response.welcome).withModOnlyMessage(response.modOnlyMessage)
-                                             .withAllowStartStopRecording(response.allowStartStopRecording)
-                                             .build();
-        
-				if (_resultListener != null) _resultListener(true, response);
+				
+				apiResponse.metadata = extractMetadata(result.response.metadata);
+				
+				if (result.response.hasOwnProperty("modOnlyMessage")) {
+					apiResponse.modOnlyMessage = result.response.modOnlyMessage;
+				}
+				
+				apiResponse.customLogo = result.response.customLogoURL;
+				apiResponse.customCopyright = result.response.customCopyright;
+				apiResponse.muteOnStart = result.response.muteOnStart as Boolean;
+				
+				if (_resultListener != null) _resultListener(true, apiResponse);
 			}
 			
 		}
-		 
+		
 		public function get loader():URLLoader{
 			return this.urlLoader;
 		}

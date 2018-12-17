@@ -22,6 +22,11 @@ package org.bigbluebutton.main.events {
 	public class BBBEvent extends Event {    
     
 		public static const END_MEETING_EVENT:String = 'END_MEETING_EVENT';
+		public static const LOGOUT_END_MEETING_EVENT:String = 'LOGOUT_END_MEETING_EVENT';
+		public static const CONFIRM_LOGOUT_END_MEETING_EVENT:String = 'CONFIRM_LOGOUT_END_MEETING_EVENT';
+		public static const INACTIVITY_WARNING_EVENT:String = 'INACTIVITY_WARNING_EVENT';
+		public static const ACTIVITY_RESPONSE_EVENT:String = 'ACTIVITY_RESPONSE_EVENT';
+		public static const MEETING_IS_ACTIVE_EVENT:String = 'MEETING_IS_ACTIVE_EVENT';
 		public static const LOGIN_EVENT:String = 'loginEvent';
 		public static const RECEIVED_PUBLIC_CHAT_MESSAGE_EVENT:String = 'RECEIVED_PUBLIC_CHAT_MESSAGE_EVENT';
 		public static const SEND_PUBLIC_CHAT_MESSAGE_EVENT:String = 'SEND_PUBLIC_CHAT_MESSAGE_EVENT';
@@ -42,7 +47,22 @@ package org.bigbluebutton.main.events {
 	public static const MIC_SETTINGS_CLOSED:String = "MIC_SETTINGS_CLOSED";
 	public static const CAM_SETTINGS_CLOSED:String = "CAM_SETTINGS_CLOSED";
 	public static const JOIN_VOICE_FOCUS_HEAD:String = "JOIN_VOICE_FOCUS_HEAD";
+	public static const RECORD_AND_CLEAR_PREVIOUS_MARKERS:String = "RECORD_AND_CLEAR_PREVIOUS_MARKERS";
 	public static const CHANGE_RECORDING_STATUS:String = "CHANGE_RECORDING_STATUS";
+	public static const CHANGE_WEBCAMS_ONLY_FOR_MODERATOR:String = "CHANGE_WEBCAMS_ONLY_FOR_MODERATOR";
+
+		public static const SETTINGS_CONFIRMED:String = "BBB_SETTINGS_CONFIRMED";
+		public static const SETTINGS_CANCELLED:String = "BBB_SETTINGS_CANCELLED";
+		
+		public static const OPEN_RECORD_WINDOW : String = "OPEN_RECORD_WINDOW";
+
+		public static const ACCEPT_ALL_WAITING_GUESTS:String = "BBB_ACCEPT_ALL_WAITING_GUESTS";
+		public static const DENY_ALL_WAITING_GUESTS:String = "BBB_DENY_ALL_WAITING_GUESTS";
+		public static const BROADCAST_GUEST_POLICY:String = "BBB_BROADCAST_GUEST_POLICY";
+		public static const MODERATOR_ALLOWED_ME_TO_JOIN:String = "MODERATOR_ALLOWED_ME_TO_JOIN";
+		public static const WAITING_FOR_MODERATOR_ACCEPTANCE:String = "WAITING_FOR_MODERATOR_ACCEPTANCE";
+		public static const ADD_GUEST_TO_LIST:String = "ADD_GUEST_TO_LIST";
+		public static const REMOVE_GUEST_FROM_LIST:String = "REMOVE_GUEST_FROM_LIST";
    
 		public static const RECONNECT_DISCONNECTED_EVENT:String = "RECONNECT_ON_DISCONNECTED_EVENT";
 		public static const RECONNECT_CONNECTION_ATTEMPT_FAILED_EVENT:String = "RECONNECT_CONNECTION_ATTEMPT_FAILED_EVENT";
@@ -54,6 +74,11 @@ package org.bigbluebutton.main.events {
 		public static const RECONNECT_DESKSHARE_SUCCEEDED_EVENT:String = "RECONNECT_DESKSHARE_SUCCEEDED_EVENT";
 
 		public static const CANCEL_RECONNECTION_EVENT:String = "CANCEL_RECONNECTION_EVENT";
+		public static const WEBRTC_MONITOR_UPDATE_EVENT:String = "WEBRTC_MONITOR_UPDATE_EVENT";
+		
+		public static const USER_INACTIVITY_INSPECT_EVENT:String = "user_inactivity_inspect_event";
+		public static const USER_ACTIVITY_SIGN_RESPONSE_EVENT:String = "user_activity_sign_response_event";
+		public static const GET_LOCK_SETTINGS_EVENT:String = "GET_LOCK_SETTINGS_EVENT";
 
 		public var message:String;
 		public var payload:Object = new Object();

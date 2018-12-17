@@ -27,16 +27,16 @@ package org.bigbluebutton.core.managers
   
   import mx.collections.ArrayCollection;
   import mx.core.FlexGlobals;
-  import mx.core.IFlexDisplayObject;
-  import mx.managers.PopUpManager;
   
   import org.as3commons.logging.api.ILogger;
   import org.as3commons.logging.api.getClassLogger;
+  import org.bigbluebutton.core.Options;
+  import org.bigbluebutton.core.PopUpUtil;
   import org.bigbluebutton.core.UsersUtil;
-  import org.bigbluebutton.main.api.JSLog;
   import org.bigbluebutton.main.events.BBBEvent;
   import org.bigbluebutton.main.events.ClientStatusEvent;
   import org.bigbluebutton.main.events.LogoutEvent;
+  import org.bigbluebutton.main.model.options.ApplicationOptions;
   import org.bigbluebutton.main.model.users.AutoReconnect;
   import org.bigbluebutton.main.views.ReconnectionPopup;
   import org.bigbluebutton.util.i18n.ResourceUtil;
@@ -52,13 +52,14 @@ package org.bigbluebutton.core.managers
 
     private var _connections:Dictionary = new Dictionary();
     private var _reestablished:ArrayCollection = new ArrayCollection();
-    private var _reconnectTimer:Timer = new Timer(10000, 1);
+    private var _reconnectTimer:Timer = null;
     private var _reconnectTimeout:Timer = new Timer(15000, 1);
     private var _dispatcher:Dispatcher = new Dispatcher();
-    private var _popup:IFlexDisplayObject = null;
     private var _canceled:Boolean = false;
 
-    public function ReconnectionManager() {
+    public function onConfigLoaded():void {
+			var applicationOptions : ApplicationOptions = Options.getOptions(ApplicationOptions) as ApplicationOptions;
+			_reconnectTimer = new Timer(applicationOptions.reconnWaitTime, 1);
       _reconnectTimer.addEventListener(TimerEvent.TIMER_COMPLETE, reconnect);
       _reconnectTimeout.addEventListener(TimerEvent.TIMER_COMPLETE, timeout);
     }
@@ -72,11 +73,16 @@ package org.bigbluebutton.core.managers
         }
       }
       if (!_reconnectTimeout.running)
+        _reconnectTimeout.reset();
         _reconnectTimeout.start();
     }
 
     private function timeout(e:TimerEvent = null):void {
-      LOGGER.debug("timeout");
+      var logData:Object = UsersUtil.initLogData();
+      logData.tags = ["connection"];
+      logData.logCode = "reconnect_timeout_hit";
+      LOGGER.info(JSON.stringify(logData));
+      
       _dispatcher.dispatchEvent(new BBBEvent(BBBEvent.CANCEL_RECONNECTION_EVENT));
       _dispatcher.dispatchEvent(new LogoutEvent(LogoutEvent.USER_LOGGED_OUT));
     }
@@ -89,13 +95,10 @@ package org.bigbluebutton.core.managers
 
     public function onDisconnected(type:String, callback:Function, parameters:Array):void {
       if (!_canceled) {
-		var logData:Object = new Object();
-		logData.user = UsersUtil.getUserData();
-		logData.user.connection = type;
-		
-		JSLog.warn("Connection disconnected", logData);
-		
-		logData.message = "Connection disconnected";
+		var logData:Object = UsersUtil.initLogData();
+		logData.connection = type;
+        logData.tags = ["connection"];
+		logData.logCode = "conn_mgr_conn_disconnected";
 		LOGGER.info(JSON.stringify(logData));
 		
         var obj:Object = new Object();
@@ -104,8 +107,7 @@ package org.bigbluebutton.core.managers
         _connections[type] = obj;
 
         if (!_reconnectTimer.running) {
-          _popup = PopUpManager.createPopUp(FlexGlobals.topLevelApplication as DisplayObject, ReconnectionPopup, true);
-          PopUpManager.centerPopUp(_popup);
+			PopUpUtil.createModalPopUp(FlexGlobals.topLevelApplication as DisplayObject, ReconnectionPopup, true);
 
           _reconnectTimer.reset();
           _reconnectTimer.start();
@@ -114,15 +116,10 @@ package org.bigbluebutton.core.managers
     }
 
     public function onConnectionAttemptFailed(type:String):void {
-      LOGGER.warn("onConnectionAttemptFailed, type={0}", [type]);
-	  
-	  var logData:Object = new Object();
-	  logData.user = UsersUtil.getUserData();
-	  logData.user.connection = type;
-	  
-	  JSLog.warn("Reconnect attempt on connection failed.", logData);
-	  
-	  logData.message = "Reconnect attempt on connection failed.";
+	  var logData:Object = UsersUtil.initLogData();
+	  logData.connection = type; 
+      logData.tags = ["connection"];
+	  logData.logCode = "conn_mgr_reconnect_failed";
 	  LOGGER.info(JSON.stringify(logData));
 	  
       if (_connections.hasOwnProperty(type)) {
@@ -154,18 +151,13 @@ package org.bigbluebutton.core.managers
     }
 
     public function onConnectionAttemptSucceeded(type:String):void {
-	  LOGGER.debug("onConnectionAttemptSucceeded, type={0}", [type]);
-	  var logData:Object = new Object();
-	  logData.user = UsersUtil.getUserData();
-	  logData.user.connection = type;
-	  
-	  JSLog.warn("Reconnect succeeded.", logData);
-	  
-	  logData.message = "Reconnect succeeded.";
+	  var logData:Object = UsersUtil.initLogData();
+	  logData.connection = type;
+      logData.tags = ["connection"];
+	  logData.logCode = "conn_mgr_reconnect_succeeded";
 	  LOGGER.info(JSON.stringify(logData));
 	  
       dispatchReconnectionSucceededEvent(type);
-
       delete _connections[type];
       if (type == BIGBLUEBUTTON_CONNECTION) {
         reconnect();
@@ -177,11 +169,11 @@ package org.bigbluebutton.core.managers
 
         _dispatcher.dispatchEvent(new ClientStatusEvent(ClientStatusEvent.SUCCESS_MESSAGE_EVENT, 
           ResourceUtil.getInstance().getString('bbb.connection.reestablished'), 
-          msg));
+          msg, 'bbb.connection.reestablished'));
 
         _reconnectTimeout.reset();
-        removePopUp();
-      }
+		PopUpUtil.removePopUp(ReconnectionPopup);
+	  }
     }
 
     public function onCancelReconnection():void {
@@ -189,15 +181,8 @@ package org.bigbluebutton.core.managers
 
       for (var type:Object in _connections) delete _connections[type];
 
-      removePopUp();
-    }
-
-    private function removePopUp():void {
-      if (_popup != null) {
-        PopUpManager.removePopUp(_popup);
-        _popup = null;
-      }
-    }
+	  PopUpUtil.removePopUp(ReconnectionPopup);
+	}
 
     private function connectionReestablishedMessage():String {
       var msg:String = "";

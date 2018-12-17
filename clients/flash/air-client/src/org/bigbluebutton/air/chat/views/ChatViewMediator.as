@@ -1,96 +1,141 @@
 package org.bigbluebutton.air.chat.views {
-	
-	import flash.events.Event;
+	import flash.events.KeyboardEvent;
 	import flash.events.MouseEvent;
+	import flash.ui.Keyboard;
 	
-	import mx.collections.ArrayCollection;
-	import mx.core.FlexGlobals;
-	import mx.events.FlexEvent;
-	import mx.resources.ResourceManager;
+	import mx.utils.StringUtil;
 	
-	import org.bigbluebutton.lib.chat.models.ChatMessageVO;
-	import org.bigbluebutton.lib.chat.models.ChatMessages;
-	import org.bigbluebutton.lib.chat.models.IChatMessagesSession;
-	import org.bigbluebutton.lib.chat.services.IChatMessageService;
-	import org.bigbluebutton.lib.main.models.IUserSession;
-	import org.bigbluebutton.air.main.models.IUserUISession;
-	import org.bigbluebutton.lib.user.models.User;
-	import org.osflash.signals.ISignal;
+	import org.bigbluebutton.air.chat.models.ChatMessageVO;
+	import org.bigbluebutton.air.chat.models.GroupChat;
+	import org.bigbluebutton.air.chat.models.IChatMessagesSession;
+	import org.bigbluebutton.air.chat.services.IChatMessageService;
+	import org.bigbluebutton.air.main.models.IMeetingData;
+	import org.bigbluebutton.air.main.models.IUISession;
+	import org.bigbluebutton.air.main.models.LockSettings2x;
+	import org.bigbluebutton.air.user.models.User2x;
+	import org.bigbluebutton.air.user.models.UserChangeEnum;
+	import org.bigbluebutton.air.user.models.UserRole;
 	
 	import robotlegs.bender.bundles.mvcs.Mediator;
 	
-	import spark.components.List;
-	import spark.components.View;
-	import spark.events.ViewNavigatorEvent;
+	import spark.components.VScrollBar;
 	
 	public class ChatViewMediator extends Mediator {
 		
 		[Inject]
-		public var view:IChatView;
+		public var view:ChatViewBase;
 		
 		[Inject]
 		public var chatMessageService:IChatMessageService;
 		
 		[Inject]
-		public var userSession:IUserSession;
-		
-		[Inject]
-		public var userUISession:IUserUISession;
-		
-		[Inject]
 		public var chatMessagesSession:IChatMessagesSession;
 		
-		protected var dataProvider:ArrayCollection;
+		[Inject]
+		public var meetingData:IMeetingData;
 		
-		protected var usersSignal:ISignal;
+		[Inject]
+		public var uiSession:IUISession;
 		
-		protected var list:List;
-		
-		protected var publicChat:Boolean = true;
-		
-		protected var user:User;
-		
-		protected var data:Object;
+		protected var _chat:GroupChat;
 		
 		override public function initialize():void {
-			data = userUISession.currentPageDetails;
-			if (data is User) {
-				createNewChat(data as User);
-			} else {
-				openChat(data);
-			}
 			chatMessageService.sendMessageOnSuccessSignal.add(onSendSuccess);
 			chatMessageService.sendMessageOnFailureSignal.add(onSendFailure);
-			list.addEventListener(FlexEvent.UPDATE_COMPLETE, scrollUpdate);
-			view.sendButton.addEventListener(MouseEvent.CLICK, onSendButtonClick);
-			userSession.userList.userRemovedSignal.add(userRemoved);
-			userSession.userList.userAddedSignal.add(userAdded);
-			(view as View).addEventListener(ViewNavigatorEvent.VIEW_DEACTIVATE, viewDeactivateHandler);
-			FlexGlobals.topLevelApplication.backBtn.visible = false;
-			FlexGlobals.topLevelApplication.profileBtn.visible = true;
+			meetingData.users.userChangeSignal.add(onUserChange);
+			meetingData.meetingStatus.lockSettingsChangeSignal.add(onLockSettingsChanged);
+			
+			view.textInput.addEventListener(KeyboardEvent.KEY_DOWN, keyDownHandler);
+			view.sendButton.addEventListener(MouseEvent.CLICK, sendButtonClickHandler);
+			
+			var data:Object = uiSession.currentPageDetails;
+			
+			var chat:GroupChat = chatMessagesSession.getGroupByChatId(data.chatId);
+			if (chat) {
+				openChat(chat);
+			}
+			
 		}
 		
-		/**
-		 * Reset new messages count when user leaves the page
-		 * */
-		protected function viewDeactivateHandler(event:ViewNavigatorEvent):void {
-			var chatMessages:ChatMessages = null;
-			if (data is User) {
-				chatMessages = chatMessagesSession.getPrivateMessages(user.userID, user.name).privateChat;
-			} else {
-				chatMessages = data.chatMessages as ChatMessages;
+		protected function openChat(chat:GroupChat):void {
+			if (_chat) {
+				_chat.newMessageSignal.remove(onNewMessage);
 			}
-			chatMessages.resetNewMessages();
+			
+			_chat = chat;
+			if (_chat) {
+				_chat.newMessages = 0; //resetNewMessages();
+				view.chatList.dataProvider = _chat.messages;
+				_chat.newMessageSignal.add(onNewMessage);
+			}
+			
+			var lockSettings:LockSettings2x = meetingData.meetingStatus.lockSettings;
+			trace("APPLYING LOCK SETTINGS pubChatDisabled=" + lockSettings.disablePubChat + ", privChatDisabled=" + lockSettings.disablePrivChat);
+			applyLockSettings(lockSettings);
+		}
+		
+		protected function onNewMessage(chatId:String):void {
+			if (_chat && _chat.chatId == chatId) {
+				if (view) {
+					var vScrollBar:VScrollBar = view.chatList.scroller.verticalScrollBar;
+					if (vScrollBar) {
+						vScrollBar.value = vScrollBar.maximum;
+					}
+				}
+				_chat.newMessages = 0;
+			}
+		}
+		
+		private function onSendSuccess(result:String):void {
+			view.textInput.enabled = true;
+			view.textInput.text = "";
+		}
+		
+		private function onSendFailure(status:String):void {
+			view.textInput.enabled = true;
+		}
+		
+		private function onUserChange(user:User2x, prop:int):void {
+			switch (prop) {
+				case UserChangeEnum.JOIN:
+					userAdded(user);
+					break;
+				case UserChangeEnum.LEAVE:
+					userRemoved(user);
+					break;
+			}
+		}
+		
+		private function onLockSettingsChanged(newSettings:LockSettings2x):void {
+			applyLockSettings(newSettings);
+		}
+		
+		private function applyLockSettings(lockSettings:LockSettings2x):void {
+			// Lock settings applies only to viewers.
+			if (meetingData.users.me.role == UserRole.MODERATOR) return;
+			
+			if (_chat.isPublic) {
+				if (lockSettings.disablePubChat) {
+					view.textInput.enabled = false;
+				} else {
+					view.textInput.enabled = true;
+				}
+			} else {
+				if (lockSettings.disablePrivChat) {
+					view.textInput.enabled = false;
+				} else {
+					view.textInput.enabled = true;
+				}
+			}
 		}
 		
 		/**
 		 * When user left the conference, add '[Offline]' to the username
 		 * and disable text input
 		 */
-		protected function userRemoved(userID:String):void {
-			if (view != null && user.userID == userID) {
-				view.inputMessage.enabled = false;
-				view.pageName.text = user.name + ResourceManager.getInstance().getString('resources', 'userDetail.userOffline');
+		protected function userRemoved(user:User2x):void {
+			if (view != null && _chat && _chat.partnerId == user.intId) {
+				view.textInput.enabled = false;
 			}
 		}
 		
@@ -98,92 +143,52 @@ package org.bigbluebutton.air.chat.views {
 		 * When user returned(refreshed the page) to the conference, remove '[Offline]' from the username
 		 * and enable text input
 		 */
-		protected function userAdded(newuser:User):void {
-			if ((view != null) && (user != null) && (user.userID == newuser.userID)) {
-				view.inputMessage.enabled = true;
-				view.pageName.text = user.name;
+		protected function userAdded(newUser:User2x):void {
+			if ((view != null) && (_chat != null) && (_chat.partnerId == newUser.intId)) {
+				view.textInput.enabled = true;
 			}
 		}
 		
-		protected function createNewChat(user:User):void {
-			publicChat = false;
-			this.user = user;
-			view.pageName.text = user.name;
-			view.inputMessage.enabled = chatMessagesSession.getPrivateMessages(user.userID, user.name).userOnline;
-			dataProvider = chatMessagesSession.getPrivateMessages(user.userID, user.name).privateChat.messages;
-			list = view.list;
-			list.dataProvider = dataProvider;
-		}
-		
-		protected function openChat(currentPageDetails:Object):void {
-			publicChat = currentPageDetails.publicChat;
-			user = currentPageDetails.user;
-			view.pageName.text = currentPageDetails.name;
-			if (!publicChat) {
-				view.inputMessage.enabled = currentPageDetails.online;
-				// if user went offline, and 'OFFLINE' marker is not already part of the string, add OFFLINE to the username
-				if ((currentPageDetails.online == false) && (view.pageName.text.indexOf(ResourceManager.getInstance().getString('resources', 'userDetail.userOffline')) == -1)) {
-					view.pageName.text += ResourceManager.getInstance().getString('resources', 'userDetail.userOffline');
-				}
-			}
-			var chatMessages:ChatMessages = currentPageDetails.chatMessages as ChatMessages;
-			chatMessages.resetNewMessages();
-			dataProvider = chatMessages.messages as ArrayCollection;
-			list = view.list;
-			list.dataProvider = dataProvider;
-		}
-		
-		private function scrollUpdate(e:Event):void {
-			if (list.dataGroup.contentHeight > list.dataGroup.height) {
-				list.dataGroup.verticalScrollPosition = list.dataGroup.contentHeight - list.dataGroup.height;
+		private function keyDownHandler(e:KeyboardEvent):void {
+			if (e.keyCode == Keyboard.ENTER && !e.shiftKey) {
+				sendButtonClickHandler(null);
 			}
 		}
 		
-		private function onSendButtonClick(e:MouseEvent):void {
-			view.inputMessage.enabled = false;
-			view.sendButton.enabled = false;
-			var currentDate:Date = new Date();
-			//TODO get info from the right source
-			var m:ChatMessageVO = new ChatMessageVO();
-			m.fromUserID = userSession.userId;
-			m.fromUsername = userSession.userList.getUser(userSession.userId).name;
-			m.fromColor = "0";
-			m.fromTime = currentDate.time;
-			m.fromTimezoneOffset = currentDate.timezoneOffset;
-			m.fromLang = "en";
-			m.message = view.inputMessage.text;
-			m.toUserID = publicChat ? "public_chat_userid" : user.userID;
-			m.toUsername = publicChat ? "public_chat_username" : user.name;
-			if (publicChat) {
-				m.chatType = "PUBLIC_CHAT";
-				chatMessageService.sendPublicMessage(m);
-			} else {
-				m.chatType = "PRIVATE_CHAT";
-				chatMessageService.sendPrivateMessage(m);
+		private function sendButtonClickHandler(e:MouseEvent):void {
+			var message:String = StringUtil.trim(view.textInput.text);
+			
+			if (message) {
+				view.textInput.enabled = false;
+				
+				var currentDate:Date = new Date();
+				//TODO get info from the right source
+				var m:ChatMessageVO = new ChatMessageVO();
+				m.fromUserId = meetingData.users.me.intId;
+				m.fromUsername = meetingData.users.me.name;
+				m.fromColor = "0";
+				m.fromTime = currentDate.time;
+				m.message = message;
+				
+				chatMessageService.sendChatMessage(_chat.chatId, m);
+				
 			}
-		}
-		
-		private function onSendSuccess(result:String):void {
-			view.inputMessage.enabled = true;
-			view.sendButton.enabled = true;
-			view.inputMessage.text = "";
-		}
-		
-		private function onSendFailure(status:String):void {
-			view.inputMessage.enabled = true;
-			view.sendButton.enabled = true;
 		}
 		
 		override public function destroy():void {
-			super.destroy();
-			list.removeEventListener(FlexEvent.UPDATE_COMPLETE, scrollUpdate);
-			view.sendButton.removeEventListener(MouseEvent.CLICK, onSendButtonClick);
 			chatMessageService.sendMessageOnSuccessSignal.remove(onSendSuccess);
 			chatMessageService.sendMessageOnFailureSignal.remove(onSendFailure);
-			userSession.userList.userRemovedSignal.remove(userRemoved);
-			userSession.userList.userAddedSignal.remove(userAdded);
-			(view as View).removeEventListener(ViewNavigatorEvent.VIEW_DEACTIVATE, viewDeactivateHandler);
-			view.dispose();
+			meetingData.users.userChangeSignal.remove(onUserChange);
+			meetingData.meetingStatus.lockSettingsChangeSignal.remove(onLockSettingsChanged);
+			
+			if (_chat) {
+				_chat.newMessageSignal.remove(onNewMessage);
+			}
+			
+			view.textInput.removeEventListener(KeyboardEvent.KEY_DOWN, keyDownHandler);
+			view.sendButton.removeEventListener(MouseEvent.CLICK, sendButtonClickHandler);
+			
+			super.destroy();
 			view = null;
 		}
 	}

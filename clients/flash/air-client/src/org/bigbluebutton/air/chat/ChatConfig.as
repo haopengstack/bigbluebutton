@@ -1,21 +1,19 @@
 package org.bigbluebutton.air.chat {
 	
-	import org.bigbluebutton.air.chat.views.ChatRoomsViewMediator;
+	import org.bigbluebutton.air.chat.commands.RequestGroupChatHistoryCommand;
+	import org.bigbluebutton.air.chat.commands.RequestGroupChatHistorySignal;
+	import org.bigbluebutton.air.chat.commands.RequestWelcomeMessageCommand;
+	import org.bigbluebutton.air.chat.commands.RequestWelcomeMessageSignal;
+	import org.bigbluebutton.air.chat.commands.StartPrivateChatCommand;
+	import org.bigbluebutton.air.chat.commands.StartPrivateChatSignal;
+	import org.bigbluebutton.air.chat.views.ChatViewBase;
 	import org.bigbluebutton.air.chat.views.ChatViewMediator;
-	import org.bigbluebutton.air.chat.views.IChatRoomsView;
-	import org.bigbluebutton.air.chat.views.IChatView;
-	import org.bigbluebutton.air.chat.views.SelectParticipantViewMediator;
-	import org.bigbluebutton.air.users.views.ISelectParticipantView;
 	
 	import robotlegs.bender.extensions.mediatorMap.api.IMediatorMap;
 	import robotlegs.bender.extensions.signalCommandMap.api.ISignalCommandMap;
 	import robotlegs.bender.framework.api.IConfig;
-	import robotlegs.bender.framework.api.IInjector;
 	
 	public class ChatConfig implements IConfig {
-		
-		[Inject]
-		public var injector:IInjector;
 		
 		[Inject]
 		public var mediatorMap:IMediatorMap;
@@ -24,33 +22,21 @@ package org.bigbluebutton.air.chat {
 		public var signalCommandMap:ISignalCommandMap;
 		
 		public function configure():void {
-			dependencies();
 			mediators();
 			signals();
-		}
-		
-		/**
-		 * Specifies all the dependencies for the feature
-		 * that will be injected onto objects used by the
-		 * application.
-		 */
-		private function dependencies():void {
 		}
 		
 		/**
 		 * Maps view mediators to views.
 		 */
 		private function mediators():void {
-			mediatorMap.map(IChatView).toMediator(ChatViewMediator);
-			mediatorMap.map(IChatRoomsView).toMediator(ChatRoomsViewMediator);
-			mediatorMap.map(ISelectParticipantView).toMediator(SelectParticipantViewMediator);
+			mediatorMap.map(ChatViewBase).toMediator(ChatViewMediator);
 		}
 		
-		/**
-		 * Maps signals to commands using the signalCommandMap.
-		 */
 		private function signals():void {
-			
+			signalCommandMap.map(RequestGroupChatHistorySignal).toCommand(RequestGroupChatHistoryCommand);
+			signalCommandMap.map(RequestWelcomeMessageSignal).toCommand(RequestWelcomeMessageCommand);
+			signalCommandMap.map(StartPrivateChatSignal).toCommand(StartPrivateChatCommand);
 		}
 	}
 }

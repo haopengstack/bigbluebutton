@@ -1,0 +1,220 @@
+@import "../../stylesheets/variables/_all";
+
+:root {
+  --toast-default-color: var(--color-white);
+  --toast-default-bg: var(--color-gray);
+
+  --toast-info-color: var(--color-white);
+  --toast-info-bg: var(--color-primary);
+
+  --toast-success-color: var(--color-white);
+  --toast-success-bg: var(--color-success);
+
+  --toast-error-color: var(--color-white);
+  --toast-error-bg: var(--color-danger);
+
+  --toast-warning-color: var(--color-white);
+  --toast-warning-bg: var(--color-warning);
+
+  --background: var(--color-white);
+  --background-active: #eee;
+}
+
+@mixin notification-variant($icon-color, $icon-bg) {
+  display: flex;
+
+  > .icon {
+    color: $icon-color;
+    background-color: $icon-bg;
+  }
+}
+
+.toastContainer {
+  display: flex;
+  flex-direction: column;
+}
+
+.smallToastContainer {
+  background-color: inherit;
+  margin: -.35rem;
+}
+
+.icon {
+  align-self: flex-start;
+  margin-bottom: auto;
+  margin-right: var(--sm-padding-x);
+  width: 2rem;
+  border-radius: 50%;
+  position: relative;
+  height: 2rem;
+  flex-shrink: 0;
+
+  > i {
+    line-height: 0;
+    color: inherit;
+    position: absolute;
+    top: 50%;
+    width: 100%;
+  }
+}
+
+.smallIcon {
+  width: 1.2rem;
+  height: 1.2rem;
+  > i {
+    font-size: 70%;
+  }
+}
+
+.separator {
+  height: 1px;
+  width: 99%;
+  position: absolute;
+  margin-left: -.5em;
+  background-color: var(--color-gray-lighter);
+  margin-top: calc(var(--line-height-computed) * .5);
+  margin-bottom: calc(var(--line-height-computed) * .5);
+  @include mq($small-only) {
+    position: relative;
+    margin-left: auto;
+  }
+}
+
+.message {
+  margin-top: auto;
+  margin-bottom: auto;
+  font-size: var(--font-size-small);
+  max-height: 15vh;
+  overflow: auto;
+}
+
+.smallMessage {
+  font-size: 80%;
+}
+
+.default {
+  @include notification-variant(var(--toast-default-color), var(--toast-default-bg));
+}
+
+.info {
+  @include notification-variant(var(--toast-info-color), var(--toast-info-bg));
+}
+
+.success {
+  @include notification-variant(var(--toast-success-color), var(--toast-success-bg));
+}
+
+.error {
+  @include notification-variant(var(--toast-error-color), var(--toast-error-bg));
+}
+
+.warning {
+  @include notification-variant(var(--toast-warning-color), var(--toast-warning-bg));
+}
+
+.container {
+  z-index: 9999;
+  position: fixed;
+  padding: var(--sm-padding-y);
+  width: 15vw;
+  min-width: 320px;
+  box-sizing: border-box;
+  top: var(--md-padding-y);
+  right: var(--md-padding-y);
+  max-height: 75vh;
+  overflow: hidden;
+
+  @include mq($small-only) {
+    left: var(--sm-padding-y);
+    width: auto;
+  }
+}
+
+.toast {
+  position: relative;
+  margin-bottom: var(--sm-padding-x);
+  padding: var(--md-padding-x);
+  border-radius: var(--border-radius);
+  box-shadow: 0 1px 10px 0 rgba(0, 0, 0, 0.1), 0 2px 15px 0 rgba(0, 0, 0, 0.05);
+  display: flex;
+  justify-content: space-between;
+  cursor: pointer;
+  color: var(--color-text);
+  background-color: var(--background);
+  animation-duration: 0.75s;
+  animation-fill-mode: both;
+
+  &:hover,
+  &:focus {
+    background-color: var(--background-active);
+  }
+}
+
+.body {
+  margin: auto 0;
+  flex: 1;
+  background-color: inherit;
+}
+
+.close {
+  background: transparent;
+  outline: none;
+  border: none;
+  cursor: pointer;
+  opacity: .5;
+  transition: .3s ease;
+  font-size: .35rem;
+  color: var(--color-gray-dark);
+  padding: .4rem;
+  line-height: 0;
+  position: absolute;
+  top: var(--md-padding-y);
+  right: var(--md-padding-y);
+  font-size: 70%;
+  top: var(--lg-padding-y);
+  &:before {
+    margin-left: -.2rem;
+  }
+
+  &:hover,
+  &:focus {
+    opacity: 1;
+  }
+
+  @include mq($small-only) {
+    position: relative;
+    top: auto;
+    right: auto;
+    align-self: flex-start;
+    margin-top: auto;
+    margin-bottom: auto;
+    margin-left: var(--sm-padding-x);
+    font-size: 1rem;
+    line-height: 1;
+    border: none;
+  }
+}
+
+@keyframes track-progress {
+  0% {
+    width: 100%;
+  }
+  100% {
+    width: 0;
+  }
+}
+.backgroundColorInherit {
+  background-color: inherit;
+}
+
+.progress {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  width: 0;
+  height: 5px;
+  z-index: 9999;
+  animation: track-progress linear 1;
+  background-color: var(--color-gray-lighter);
+  border-radius: var(--border-radius);
+}

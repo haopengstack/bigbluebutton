@@ -6,15 +6,12 @@
   import flash.media.Sound;
   import flash.media.SoundChannel;
   import flash.media.SoundTransform;
-  
   import org.as3commons.logging.api.ILogger;
   import org.as3commons.logging.api.getClassLogger;
-  import org.as3commons.logging.util.jsonXify;
   import org.bigbluebutton.common.Media;
+  import org.bigbluebutton.core.Options;
   import org.bigbluebutton.core.UsersUtil;
   import org.bigbluebutton.core.events.VoiceConfEvent;
-  import org.bigbluebutton.main.api.JSLog;
-  import org.bigbluebutton.modules.phone.PhoneOptions;
   import org.bigbluebutton.modules.phone.events.FlashCallConnectedEvent;
   import org.bigbluebutton.modules.phone.events.FlashCallDisconnectedEvent;
   import org.bigbluebutton.modules.phone.events.FlashEchoTestFailedEvent;
@@ -32,6 +29,7 @@
   import org.bigbluebutton.modules.phone.events.FlashVoiceConnectionStatusEvent;
   import org.bigbluebutton.modules.phone.events.JoinVoiceConferenceCommand;
   import org.bigbluebutton.modules.phone.events.LeaveVoiceConferenceCommand;
+  import org.bigbluebutton.modules.phone.models.PhoneOptions;
 
   public class FlashCallManager
   {
@@ -77,7 +75,7 @@
     }
         
     private function initConnectionManager():void {
-      options = new PhoneOptions();
+      options = Options.getOptions(PhoneOptions) as PhoneOptions;
       var uid:String = String(Math.floor(new Date().getTime()));
       var uname:String = encodeURIComponent(UsersUtil.getMyUserID() + "-bbbID-" + UsersUtil.getMyUsername()); 
       connectionManager.setup(uid, UsersUtil.getMyUserID(), uname , UsersUtil.getInternalMeetingID(), options.uri);
@@ -116,7 +114,7 @@
       * after. (richard mar 28, 2014)
       */
       if (mic) {
-        if (options.skipCheck) {
+        if (options.skipCheck && PhoneOptions.firstAudioJoin) {
           LOGGER.debug("Calling into voice conference. skipCheck=[{0}] echoTestDone=[{1}]", [options.skipCheck, echoTestDone]);
 
           streamManager.useDefaultMic();
@@ -216,6 +214,16 @@
     }
     
     public function initialize():void {      
+      switch (state) {
+        case STOP_ECHO_THEN_JOIN_CONF:
+          // if we initialize usingFlash here, we won't be able to hang up from
+          // the flash connection
+          LOGGER.debug("Invalid state for initialize, aborting...");
+          return;
+        default:
+          break;
+      }
+
       printMics();
       if (options.useWebRTCIfAvailable && isWebRTCSupported()) {
         usingFlash = false;
@@ -277,34 +285,31 @@
     
     public function handleFlashCallConnectedEvent(event:FlashCallConnectedEvent):void {      
       LOGGER.debug("handling FlashCallConnectedEvent, current state: {0}", [state]);
-      var logData:Object = new Object();       
-      logData.user = UsersUtil.getUserData();
+      var logData:Object = UsersUtil.initLogData();
+      logData.tags = ["voice", "flash"];
       
       switch (state) {
         case CALLING_INTO_CONFERENCE:
-          JSLog.info("Successfully joined the voice conference.", logData);
-		  logData.message = "Successfully joined the voice conference";
-          LOGGER.info(jsonXify(logData));
+		  		logData.logCode = "flash_joined_voice_conf_success";
+          LOGGER.info(JSON.stringify(logData));
           state = IN_CONFERENCE;
           dispatcher.dispatchEvent(new FlashJoinedVoiceConferenceEvent());
           streamManager.callConnected(event.playStreamName, event.publishStreamName, event.codec, event.listenOnlyCall);
           break;
         case CONNECTING_TO_LISTEN_ONLY_STREAM:
-          JSLog.info("Successfully connected to the listen only stream.", logData);
-		  logData.message = "Successfully connected to the listen only stream.";
-          LOGGER.info(jsonXify(logData));
+		  		logData.logCode = "flash_joined_listen_only";
+          LOGGER.info(JSON.stringify(logData));
           state = ON_LISTEN_ONLY_STREAM;
           dispatcher.dispatchEvent(new FlashJoinedListenOnlyVoiceConferenceEvent());
           streamManager.callConnected(event.playStreamName, event.publishStreamName, event.codec, event.listenOnlyCall);
           break;
         case CALLING_INTO_ECHO_TEST:
           state = IN_ECHO_TEST;
-          JSLog.info("Successfully called into the echo test application.", logData);
-		  logData.message = "Successfully called into the echo test application.";
-		  logData.publishStreamName = event.publishStreamName;
-		  logData.playStreamName = event.playStreamName;
-		  logData.codec = event.codec;
-		  LOGGER.info(jsonXify(logData));
+		  		logData.logCode = "flash_echo_test_success";
+		  		logData.publishStreamName = event.publishStreamName;
+		  		logData.playStreamName = event.playStreamName;
+		  		logData.codec = event.codec;
+		  		LOGGER.info(JSON.stringify(logData));
 		  
           streamManager.callConnected(event.playStreamName, event.publishStreamName, event.codec, event.listenOnlyCall);
           
@@ -317,8 +322,8 @@
     }
 
     public function handleFlashCallDisconnectedEvent(event:FlashCallDisconnectedEvent):void {
-      var logData:Object = new Object();       
-      logData.user = UsersUtil.getUserData();
+      var logData:Object = UsersUtil.initLogData();
+      logData.tags = ["voice", "flash"];
       
       LOGGER.debug("Flash call disconnected, current state: {0}", [state]);
       switch (state) {
@@ -328,16 +333,14 @@
           break;
         case ON_LISTEN_ONLY_STREAM:
           state = INITED;
-          JSLog.info("Flash user left the listen only stream.", logData);
-		  logData.message = "Flash user left the listen only stream.";
-          LOGGER.info(jsonXify(logData));
-		  dispatcher.dispatchEvent(new FlashLeftVoiceConferenceEvent());
+		  		logData.logCode = "flash_left_listen_only";
+          LOGGER.info(JSON.stringify(logData));
+		  		dispatcher.dispatchEvent(new FlashLeftVoiceConferenceEvent());
           break;
         case IN_ECHO_TEST:
           state = INITED;
-          JSLog.info("Flash echo test stopped.", logData);
-		  logData.message = "Flash echo test stopped.";
-		  LOGGER.info(jsonXify(logData));
+		  		logData.logCode = "flash_echo_test_stopped";
+		  		LOGGER.info(JSON.stringify(logData));
 
           dispatcher.dispatchEvent(new FlashEchoTestStoppedEvent());
           break;
@@ -347,10 +350,8 @@
           break;
         case CALLING_INTO_ECHO_TEST:
           state = INITED;
-          JSLog.error("Unsuccessfully called into the echo test application.", logData);
-
-		  logData.message = "Unsuccessfully called into the echo test application.";
-		  LOGGER.info(jsonXify(logData));
+		  		logData.logCode = "flash_failed_calling_echo_test";
+		  		LOGGER.info(JSON.stringify(logData));
           dispatcher.dispatchEvent(new FlashEchoTestFailedEvent());
           break;
         default:
@@ -369,7 +370,9 @@
             LOGGER.debug("ignoring join voice conf as usingFlash=[{0}] or eventMic=[{1}]", [usingFlash, !event.mic]);
           }
           break;
-		
+        case ON_LISTEN_ONLY_STREAM:
+          hangup();
+          break;
         default:
           LOGGER.debug("Ignoring join voice as state=[{0}]", [state]);
       }
@@ -383,20 +386,7 @@
       }
       hangup();
     }
-    
-	public function handleBecomeViewer():void {
-    LOGGER.debug("Handling BecomeViewer, current state: {0}, using flash: {1}", [state, usingFlash]);
-		if (options.presenterShareOnly) {
-			if (!usingFlash || state != IN_CONFERENCE || UsersUtil.amIModerator()) return;
-      LOGGER.debug("handleBecomeViewer leaving flash with mic and joining listen only stream");
-			hangup();
-			
-			var command:JoinVoiceConferenceCommand = new JoinVoiceConferenceCommand();
-			command.mic = false;
-			dispatcher.dispatchEvent(command);
-		}
-	}
-	
+
     public function handleFlashVoiceConnected():void {
       switch (state) {
         case JOIN_VOICE_CONFERENCE:
@@ -456,7 +446,12 @@
     }
 
     public function handleReconnectSIPSucceededEvent():void {
-      if (state != ON_LISTEN_ONLY_STREAM) {
+      // Check if using Flash to join voice conference. There is a bug that
+      // I can't find why the ReconnectionManager is dispatching a RECONNECT_SIP_SUCCEEDED_EVENT
+      // even if the client is not connected to the Red5 SIP app. What happens is we end up
+      // ejecting the user from the voice conference even if joined using webrtc when the flash
+      // client auto reconnects on bbb, screenshare, and video connections. (ralam Oct 23, 2018)
+      if (usingFlash && state != ON_LISTEN_ONLY_STREAM) {
         var e:VoiceConfEvent = new VoiceConfEvent(VoiceConfEvent.EJECT_USER);
         e.userid = UsersUtil.getMyUserID();
         dispatcher.dispatchEvent(e);

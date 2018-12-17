@@ -19,7 +19,7 @@
 package org.bigbluebutton.core.model
 {
     import flash.utils.Dictionary;
-    
+    import org.bigbluebutton.core.UsersUtil;
     import org.as3commons.logging.api.ILogger;
     import org.as3commons.logging.api.getClassLogger;
     import org.bigbluebutton.util.i18n.ResourceUtil;
@@ -89,24 +89,29 @@ package org.bigbluebutton.core.model
                 _h264Profile = vxml.h264Profile.toString();
             }
 
-			LOGGER.debug("This is a new video profile");
-			LOGGER.debug(this.toString());
+            var logData:Object = UsersUtil.initLogData();
+            logData.videoProfile = vidProfileInfo();
+            logData.tags = ["video"];
+            logData.logCode = "loaded_video_profile";
+            LOGGER.info(JSON.stringify(logData));
         }
 
-        public function toString():String {
-            return "VideoProfile [ "
-                + "id: " + this.id + ", "
-                + "default: " + this.defaultProfile + ", "
-                + "name: " + this.name + ", "
-                + "width: " + this.width + ", "
-                + "height: " + this.height + ", "
-                + "keyFrameInterval: " + this.keyFrameInterval + ", "
-                + "modeFps: " + this.modeFps + ", "
-                + "qualityBandwidth: " + this.qualityBandwidth + ", "
-                + "qualityPicture: " + this.qualityPicture + ", "
-                + "enableH264: " + this.enableH264 + ", "
-                + "h264Level: " + this.h264Level + ", "
-                + "h264Profile: " + this.h264Profile + " ]";
+        public function vidProfileInfo():Object {
+					var vinf:Object = new Object();
+					vinf.id = this.id;
+					vinf.defaultProfile = this.defaultProfile;
+					vinf.name = this.name;
+					vinf.width = this.width;
+					vinf.height = this.height;
+					vinf.keyFrameInterval = this.keyFrameInterval;
+					vinf.modeFps = this.modeFps;
+					vinf.qualityBandwidth = this.qualityBandwidth;
+					vinf.qualityPicture =  this.qualityPicture;
+					vinf.enableH264 = this.enableH264;
+					vinf.h264Level = this.h264Level;
+					vinf.h264Profile = this.h264Profile;
+					
+          return vinf;
         }
 
         private static function nextId():int {

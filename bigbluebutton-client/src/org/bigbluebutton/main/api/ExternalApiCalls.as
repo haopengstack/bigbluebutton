@@ -20,10 +20,13 @@ package org.bigbluebutton.main.api
 {
   import flash.external.ExternalInterface;
   
+  import mx.collections.ArrayCollection;
+  
   import org.as3commons.logging.api.ILogger;
   import org.as3commons.logging.api.getClassLogger;
   import org.bigbluebutton.common.Role;
   import org.bigbluebutton.core.EventConstants;
+  import org.bigbluebutton.core.Options;
   import org.bigbluebutton.core.UsersUtil;
   import org.bigbluebutton.core.events.AmIPresenterQueryEvent;
   import org.bigbluebutton.core.events.AmISharingWebcamQueryEvent;
@@ -31,14 +34,14 @@ package org.bigbluebutton.main.api
   import org.bigbluebutton.core.events.GetMyUserInfoRequestEvent;
   import org.bigbluebutton.core.events.IsUserPublishingCamRequest;
   import org.bigbluebutton.core.events.SwitchedLayoutEvent;
-  import org.bigbluebutton.core.managers.UserManager;
+  import org.bigbluebutton.core.model.LiveMeeting;
+  import org.bigbluebutton.core.model.users.User2x;
   import org.bigbluebutton.core.vo.CameraSettingsVO;
   import org.bigbluebutton.main.events.BBBEvent;
   import org.bigbluebutton.main.events.LogoutEvent;
   import org.bigbluebutton.main.events.SwitchedPresenterEvent;
   import org.bigbluebutton.main.events.UserJoinedEvent;
   import org.bigbluebutton.main.events.UserLeftEvent;
-  import org.bigbluebutton.main.model.users.BBBUser;
   import org.bigbluebutton.main.model.users.events.BroadcastStartedEvent;
   import org.bigbluebutton.main.model.users.events.BroadcastStoppedEvent;
   import org.bigbluebutton.main.model.users.events.StreamStartedEvent;
@@ -51,6 +54,7 @@ package org.bigbluebutton.main.api
   import org.bigbluebutton.modules.present.events.CreatingThumbnailsEvent;
   import org.bigbluebutton.modules.present.events.GetListOfPresentationsReply;
   import org.bigbluebutton.modules.present.events.OfficeDocConvertFailedEvent;
+  import org.bigbluebutton.modules.present.events.OfficeDocConvertInvalidEvent;
   import org.bigbluebutton.modules.present.events.OfficeDocConvertSuccessEvent;
   import org.bigbluebutton.modules.present.events.UploadEvent;
   import org.bigbluebutton.modules.videoconf.model.VideoConfOptions;
@@ -77,7 +81,7 @@ package org.bigbluebutton.main.api
       var payload:Object = new Object();
       var isUserPublishing:Boolean = false;
       
-      var streamNames:Array = UsersUtil.getWebcamStream(event.userID);
+      var streamNames:Array = UsersUtil.getWebcamStreamsFor(event.userID);
       if (streamNames && streamNames.length > 0) {
         isUserPublishing = true; 
       }
@@ -86,7 +90,7 @@ package org.bigbluebutton.main.api
       payload.userID = event.userID;
       payload.isUserPublishing = isUserPublishing;
       
-      var vidConf:VideoConfOptions = new VideoConfOptions();
+      var vidConf:VideoConfOptions = Options.getOptions(VideoConfOptions) as VideoConfOptions;
       payload.uri = vidConf.uri + "/" + UsersUtil.getInternalMeetingID();
       payload.avatarURL = UsersUtil.getAvatarURL();
       payload.streamNames = streamNames;
@@ -118,7 +122,7 @@ package org.bigbluebutton.main.api
     }    
     
     public function handleStreamStartedEvent(event:StreamStartedEvent):void {
-      var vidConf:VideoConfOptions = new VideoConfOptions();
+      var vidConf:VideoConfOptions = Options.getOptions(VideoConfOptions) as VideoConfOptions;
       
       var payload:Object = new Object();
       payload.eventName = EventConstants.CAM_STREAM_SHARED;
@@ -157,21 +161,28 @@ package org.bigbluebutton.main.api
     }
     
     public function handleAmISharingCamQueryEvent(event:AmISharingWebcamQueryEvent):void {
-      var camSettings:CameraSettingsVO = UsersUtil.amIPublishing();
-      
+      var camSettingsArray:ArrayCollection = UsersUtil.myCamSettings();
       var payload:Object = new Object();
+      var camArray: ArrayCollection = new ArrayCollection();
+      for (var i:int = 0; i < camSettingsArray.length; i++) {
+        var camSettings:CameraSettingsVO = camSettingsArray.getItemAt(i) as CameraSettingsVO;
+
+        var cam:Object = new Object();
+        cam.isPublishing = camSettings.isPublishing;
+        cam.camIndex = camSettings.camIndex;
+        cam.camWidth = camSettings.videoProfile.width;
+        cam.camHeight = camSettings.videoProfile.height;
+        cam.camKeyFrameInterval = camSettings.videoProfile.keyFrameInterval;
+        cam.camModeFps = camSettings.videoProfile.modeFps;
+        cam.camQualityBandwidth = camSettings.videoProfile.qualityBandwidth;
+        cam.camQualityPicture = camSettings.videoProfile.qualityPicture;
+        cam.avatarURL = UsersUtil.getAvatarURL();
+        camArray.addItem(cam);
+      }
       payload.eventName = EventConstants.AM_I_SHARING_CAM_RESP;
-      payload.isPublishing = camSettings.isPublishing;
-      payload.camIndex = camSettings.camIndex;
-      payload.camWidth = camSettings.videoProfile.width;
-      payload.camHeight = camSettings.videoProfile.height;
-      payload.camKeyFrameInterval = camSettings.videoProfile.keyFrameInterval;
-      payload.camModeFps = camSettings.videoProfile.modeFps;
-      payload.camQualityBandwidth = camSettings.videoProfile.qualityBandwidth;
-      payload.camQualityPicture = camSettings.videoProfile.qualityPicture;
-      payload.avatarURL = UsersUtil.getAvatarURL();
-      
-      broadcastEvent(payload);        
+      payload.cameras = camArray;
+
+      broadcastEvent(payload);
     }
     
 
@@ -209,7 +220,7 @@ package org.bigbluebutton.main.api
     public function handleGetMyRoleResponse(event:CoreEvent):void {
       var payload:Object = new Object();
       payload.eventName = EventConstants.GET_MY_ROLE_RESP;
-      payload.myRole = UserManager.getInstance().getConference().whatsMyRole();
+      payload.myRole = UsersUtil.getMyRole();
       broadcastEvent(payload);        
     }
 
@@ -255,7 +266,6 @@ package org.bigbluebutton.main.api
       payload.fromColor = event.message.fromColor;
       payload.fromLang = event.message.fromLang;
       payload.fromTime = event.message.fromTime;      
-      payload.fromTimezoneOffset = event.message.fromTimezoneOffset;
       payload.message = event.message.message;
       
       payload.fromUserID = event.message.fromUserID;
@@ -270,8 +280,7 @@ package org.bigbluebutton.main.api
       payload.fromUsername = event.message.fromUsername;
       payload.fromColor = event.message.fromColor;
       payload.fromLang = event.message.fromLang;
-      payload.fromTime = event.message.fromTime;    
-      payload.fromTimezoneOffset = event.message.fromTimezoneOffset;
+      payload.fromTime = event.message.fromTime;
       payload.toUsername = event.message.toUsername;
       payload.message = event.message.message;
       
@@ -283,7 +292,7 @@ package org.bigbluebutton.main.api
         
     public function handleUserJoinedEvent(event:UserJoinedEvent):void {
       var payload:Object = new Object();
-      var user:BBBUser = UserManager.getInstance().getConference().getUser(event.userID);
+      var user:User2x = LiveMeeting.inst().users.getUser(event.userID);
       
       if (user == null) {
         LOGGER.warn("[ExternalApiCall:handleParticipantJoinEvent] Cannot find user with ID [{0}]", [event.userID]);
@@ -291,7 +300,7 @@ package org.bigbluebutton.main.api
       }
       
       payload.eventName = EventConstants.USER_JOINED;
-      payload.userID = user.userID;
+      payload.userID = user.intId;
       payload.userName = user.name;        
       
       broadcastEvent(payload);        
@@ -299,7 +308,7 @@ package org.bigbluebutton.main.api
 
     public function handleUserLeftEvent(event:UserLeftEvent):void {
       var payload:Object = new Object();
-      var user:BBBUser = UserManager.getInstance().getConference().getUser(event.userID);
+      var user:User2x = LiveMeeting.inst().users.getUser(event.userID);
       
       if (user == null) {
         LOGGER.warn("[ExternalApiCall:handleParticipantJoinEvent] Cannot find user with ID [{0}]", [event.userID]);
@@ -307,7 +316,7 @@ package org.bigbluebutton.main.api
       }
       
       payload.eventName = EventConstants.USER_LEFT;
-      payload.userID = user.userID;
+      payload.userID = user.intId;
       
       broadcastEvent(payload);        
     }
@@ -317,6 +326,12 @@ package org.bigbluebutton.main.api
       payload.eventName = EventConstants.OFFICE_DOC_CONVERSION_SUCCESS;
       broadcastEvent(payload);
     }
+	
+	public function handleOfficeDocConversionInvalid(event:OfficeDocConvertInvalidEvent):void{
+		var payload:Object = new Object();
+		payload.eventName = EventConstants.OFFICE_DOC_CONVERSION_INVALID;
+		broadcastEvent(payload);
+	}
 
     public function handleOfficeDocConversionFailed(event:OfficeDocConvertFailedEvent):void{
       var payload:Object = new Object();
@@ -360,6 +375,7 @@ package org.bigbluebutton.main.api
       payload.eventName = EventConstants.CONVERT_SUCCESS;
       payload.presentationName = event.presName;
       payload.presentationId = event.presId;
+      payload.podId = event.podId;
       broadcastEvent(payload);
     }
 

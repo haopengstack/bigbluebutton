@@ -1,8 +1,12 @@
 class UrlMappings {
 
 	static mappings = {
-		"/presentation/upload"(controller:"presentation") {
-			action = [GET:'show', POST:'upload', DELETE:'delete']
+		"/presentation/$authzToken/upload"(controller:"presentation") {
+			action = [POST:'upload']
+		}
+
+		"/presentation/checkPresentation"(controller:"presentation") {
+			action = [GET:'checkPresentationBeforeUploading']
 		}
 
 		"/presentation/test-convert"(controller:"presentation") {
@@ -25,6 +29,10 @@ class UrlMappings {
 			action = [GET:'showThumbnail']
 		}
 
+		"/presentation/$conference/$room/$presentation_name/png/$id"(controller:"presentation") {
+			action = [GET:'showPng']
+		}
+
 		"/presentation/$conference/$room/$presentation_name/svgs"(controller:"presentation") {
 			action = [GET:'numberOfSvgs']
 		}
@@ -40,6 +48,10 @@ class UrlMappings {
 		"/presentation/$conference/$room/$presentation_name/textfiles/$id"(controller:"presentation") {
 			action = [GET:'showTextfile']
 		}
+
+		"/presentation/download/$meetingId/$presId"(controller:"presentation") {
+			action = [GET:'downloadFile']
+		}
       
 		"/api/setConfigXML"(controller:"api") {
 			action = [POST:'setConfigXML']
@@ -52,16 +64,31 @@ class UrlMappings {
 		"/api/getMeetings"(controller:"api") {
 			action = [GET:'getMeetingsHandler', POST:'getMeetingsHandler']
 		}
-	
-	
-        "/api/getSessions"(controller:"api") {
-            action = [GET:'getSessionsHandler', POST:'getSessionsHandler']
-        }
-        	
+
+		"/api/getSessions"(controller:"api") {
+			action = [GET:'getSessionsHandler', POST:'getSessionsHandler']
+		}
+
 		"/api/getRecordings"(controller:"api") {
 			action = [GET:'getRecordingsHandler', POST:'getRecordingsHandler']
 		}
-		
+
+		"/api/updateRecordings"(controller:"api") {
+			action = [GET:'updateRecordingsHandler', POST:'updateRecordingsHandler']
+		}
+
+		"/api/guestWait"(controller:"api") {
+			action = [GET: 'guestWaitHandler']
+		}
+
+		"/api/getRecordingTextTracks"(controller:"recording") {
+			action = [GET:'getRecordingTextTracks']
+		}
+
+		"/api/putRecordingTextTrack"(controller:"recording") {
+			action = [POST:'putRecordingTextTrack']
+		}
+
 		"/$controller/$action?/$id?(.${format})?"{
 			constraints {
 				// apply constraints here
